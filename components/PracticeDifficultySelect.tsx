@@ -231,7 +231,7 @@ export default function PracticeDifficultySelect() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
-                <Link href={`/game?mode=practice&difficulty=${selectedDifficulty}`}>
+                <Link href={`/character-select?mode=practice&difficulty=${selectedDifficulty}`}>
                   <button
                     className="w-full py-4 rounded-xl text-2xl font-bold transition-all"
                     style={{
@@ -241,7 +241,7 @@ export default function PracticeDifficultySelect() {
                       border: `2px solid ${selectedColor}`,
                     }}
                   >
-                    Start Practice ({selectedConfig.name})
+                    Select Character ({selectedConfig.name})
                   </button>
                 </Link>
               </motion.div>

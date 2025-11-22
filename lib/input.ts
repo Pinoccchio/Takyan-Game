@@ -13,9 +13,11 @@ export function createInputState(): InputState {
     player1Left: false,
     player1Right: false,
     player1Kick: false,
+    player1Dash: false,
     player2Left: false,
     player2Right: false,
     player2Kick: false,
+    player2Dash: false,
   };
 }
 
@@ -26,7 +28,7 @@ export function handleKeyDown(key: string, inputState: InputState): InputState {
   const newState = { ...inputState };
 
   switch (key.toLowerCase()) {
-    // Player 1 controls (A, D, SPACE)
+    // Player 1 controls (A, D, SPACE, SHIFT)
     case 'a':
       newState.player1Left = true;
       break;
@@ -36,8 +38,11 @@ export function handleKeyDown(key: string, inputState: InputState): InputState {
     case ' ': // Space bar
       newState.player1Kick = true;
       break;
+    case 'shift':
+      newState.player1Dash = true;
+      break;
 
-    // Player 2 controls (Arrow keys, NUMPAD 0)
+    // Player 2 controls (Arrow keys, NUMPAD 0, /)
     case 'arrowleft':
       newState.player2Left = true;
       break;
@@ -47,6 +52,9 @@ export function handleKeyDown(key: string, inputState: InputState): InputState {
     case '0': // Numpad 0 (also catches regular 0)
     case 'numpad0':
       newState.player2Kick = true;
+      break;
+    case '/':
+      newState.player2Dash = true;
       break;
   }
 
@@ -70,6 +78,9 @@ export function handleKeyUp(key: string, inputState: InputState): InputState {
     case ' ':
       newState.player1Kick = false;
       break;
+    case 'shift':
+      newState.player1Dash = false;
+      break;
 
     // Player 2 controls
     case 'arrowleft':
@@ -81,6 +92,9 @@ export function handleKeyUp(key: string, inputState: InputState): InputState {
     case '0':
     case 'numpad0':
       newState.player2Kick = false;
+      break;
+    case '/':
+      newState.player2Dash = false;
       break;
   }
 

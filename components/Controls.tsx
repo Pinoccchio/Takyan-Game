@@ -80,6 +80,22 @@ export default function Controls({ mode = 'versus' }: ControlsProps) {
               Kick
             </span>
           </div>
+          <div className="flex items-center gap-3">
+            <kbd
+              className="px-3 py-1 rounded text-sm font-mono font-semibold"
+              style={{
+                background: `rgba(255, 255, 255, 0.2)`,
+                border: `1px solid #ffffff`,
+                color: '#ffffff',
+                boxShadow: `0 0 10px rgba(255, 255, 255, 0.3)`,
+              }}
+            >
+              SHIFT
+            </kbd>
+            <span className="text-sm" style={{ color: COLORS.lightGray }}>
+              Dash
+            </span>
+          </div>
         </div>
       </div>
 
@@ -149,6 +165,22 @@ export default function Controls({ mode = 'versus' }: ControlsProps) {
               </kbd>
               <span className="text-sm" style={{ color: COLORS.lightGray }}>
                 Kick
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <kbd
+                className="px-3 py-1 rounded text-sm font-mono font-semibold"
+                style={{
+                  background: `rgba(255, 255, 255, 0.2)`,
+                  border: `1px solid #ffffff`,
+                  color: '#ffffff',
+                  boxShadow: `0 0 10px rgba(255, 255, 255, 0.3)`,
+                }}
+              >
+                /
+              </kbd>
+              <span className="text-sm" style={{ color: COLORS.lightGray }}>
+                Dash
               </span>
             </div>
           </div>

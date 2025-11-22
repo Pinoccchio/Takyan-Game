@@ -32,6 +32,18 @@ export default function GameCanvas() {
   const customPlayerSpeed = isCustomDifficulty ? parseFloat(searchParams.get('playerSpeed') || '1.0') : 1.0;
   const customWinScore = isCustomDifficulty ? parseInt(searchParams.get('winScore') || '10') : 10;
 
+  // Handle character selection from URL parameters (p1char and p2char)
+  const parseCharacterId = (param: string | null): 1 | 2 | 3 => {
+    const parsed = parseInt(param || '1');
+    if (parsed === 1 || parsed === 2 || parsed === 3) {
+      return parsed as 1 | 2 | 3;
+    }
+    return 1; // Default to character 1 if invalid
+  };
+
+  const player1Character = parseCharacterId(searchParams.get('p1char'));
+  const player2Character = parseCharacterId(searchParams.get('p2char'));
+
   const gameMode: GameMode = mode;
 
   // Create custom config if using custom difficulty
@@ -41,7 +53,7 @@ export default function GameCanvas() {
   } : DEFAULT_CONFIG;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const gameStateRef = useRef<GameState>(initializeGameState(gameConfig, gameMode, difficulty === 'custom' ? 'medium' : difficulty));
+  const gameStateRef = useRef<GameState>(initializeGameState(gameConfig, gameMode, difficulty === 'custom' ? 'medium' : difficulty, player1Character, player2Character));
   const inputStateRef = useRef<InputState>(createInputState());
   const particlesRef = useRef<Particle[]>([]);
   const screenShakeRef = useRef<ScreenShake | null>(null);
@@ -335,7 +347,7 @@ export default function GameCanvas() {
   }, [score, winner, combo, rally, spritesLoading, loadedSprites]);
 
   const handleRestart = () => {
-    gameStateRef.current = resetGame(gameConfig, gameMode, difficulty === 'custom' ? 'medium' : difficulty);
+    gameStateRef.current = resetGame(gameConfig, gameMode, difficulty === 'custom' ? 'medium' : difficulty, player1Character, player2Character);
     inputStateRef.current = createInputState();
     particlesRef.current = [];
     screenShakeRef.current = null;

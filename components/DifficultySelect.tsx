@@ -52,7 +52,7 @@ export default function DifficultySelect() {
           whileTap={{ scale: 0.98 }}
           className="mb-12"
         >
-          <Link href="/game?mode=versus">
+          <Link href="/character-select?mode=versus">
             <div
               className="relative overflow-hidden rounded-2xl p-10 cursor-pointer group"
               style={{
@@ -139,7 +139,7 @@ export default function DifficultySelect() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
-                Start Game
+                Select Characters
               </motion.button>
 
               {/* Glow effect on hover */}

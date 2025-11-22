@@ -18,9 +18,46 @@ export interface PracticeState {
   difficulty: AIDifficulty; // Selected difficulty level
 }
 
+// ========== Character Types ==========
+
+export type CharacterType = 1 | 2 | 3;
+
+export interface CharacterStats {
+  id: CharacterType;
+  name: string;
+  description: string;
+  speedMultiplier: number;
+  powerMultiplier: number;
+}
+
+export const CHARACTER_STATS: Record<CharacterType, CharacterStats> = {
+  1: {
+    id: 1,
+    name: 'Balanced',
+    description: 'Medium speed, medium power',
+    speedMultiplier: 1.0,
+    powerMultiplier: 1.0,
+  },
+  2: {
+    id: 2,
+    name: 'Fast',
+    description: 'High speed, lower power',
+    speedMultiplier: 1.3,
+    powerMultiplier: 0.8,
+  },
+  3: {
+    id: 3,
+    name: 'Strong',
+    description: 'High power, slower speed',
+    speedMultiplier: 0.8,
+    powerMultiplier: 1.3,
+  },
+};
+
 // ========== Player & Takyan ==========
 
 export interface Player {
+  characterId: CharacterType; // Which character (1, 2, or 3)
   x: number; // Horizontal position
   y: number; // Vertical position (fixed at ground level)
   score: number; // Player's current score
@@ -32,6 +69,12 @@ export interface Player {
   kickAnimationDuration: number; // How long kick animation lasts in ms
   lastX: number; // Last X position for movement detection
   facingLeft: boolean; // Which direction player is facing
+  emotionTimer: number; // Timer for emotional reactions (Happy/Angry/Fall)
+  lastEmotion: string | null; // Last emotional animation played
+  animationTime: number; // Time in current animation (for frame progression)
+  isDashing: boolean; // Whether player is currently dashing
+  dashCooldown: number; // Remaining cooldown before next dash (ms)
+  dashDuration: number; // Remaining dash duration (ms)
 }
 
 export interface Takyan {
@@ -71,15 +114,17 @@ export interface AIState {
 // ========== Input State ==========
 
 export interface InputState {
-  // Player 1 controls (A, D, SPACE)
+  // Player 1 controls (A, D, SPACE, SHIFT)
   player1Left: boolean;
   player1Right: boolean;
   player1Kick: boolean;
+  player1Dash: boolean;
 
-  // Player 2 controls (Arrows, NUMPAD 0) - or AI if single player
+  // Player 2 controls (Arrows, NUMPAD 0, /) - or AI if single player
   player2Left: boolean;
   player2Right: boolean;
   player2Kick: boolean;
+  player2Dash: boolean;
 }
 
 // ========== Particle System ==========
@@ -113,6 +158,9 @@ export interface GameConfig {
   canvasHeight: number;
   gravity: number; // Gravity constant
   playerSpeed: number; // Player movement speed
+  dashSpeed: number; // Dash speed multiplier
+  dashDuration: number; // How long dash lasts (ms)
+  dashCooldownTime: number; // Cooldown between dashes (ms)
   kickPower: number; // Upward velocity applied on kick
   groundLevel: number; // Y position where ground starts
   winningScore: number; // Score needed to win (10 per documentation)
@@ -128,6 +176,9 @@ export const DEFAULT_CONFIG: GameConfig = {
   canvasHeight: 600,
   gravity: 0.5,
   playerSpeed: 5,
+  dashSpeed: 12,
+  dashDuration: 500, // Increased from 200ms to 500ms for better visibility
+  dashCooldownTime: 1000,
   kickPower: 15,
   groundLevel: 500,
   winningScore: 10,

@@ -6,6 +6,9 @@
 import GameCanvas from '@/components/GameCanvas';
 import { COLORS } from '@/lib/constants';
 
+// Force dynamic rendering because we use searchParams
+export const dynamic = 'force-dynamic';
+
 export default function GamePage() {
   return (
     <div

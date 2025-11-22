@@ -3,7 +3,7 @@
  * Main game update and render functions with AI, particles, and modern graphics
  */
 
-import { GameState, InputState, GameConfig, DEFAULT_CONFIG, Particle, GameMode, AIDifficulty, AI_DIFFICULTIES } from './types';
+import { GameState, InputState, GameConfig, DEFAULT_CONFIG, Particle, GameMode, AIDifficulty, AI_DIFFICULTIES, CHARACTER_STATS } from './types';
 import { updateTakyanPhysics, applyKick, resetTakyan, applyAirResistance } from './physics';
 import { checkPlayerCollision, checkGroundCollision, determineScoringSide, keepPlayerInBounds, checkBallBoundaryCollision } from './collision';
 import { applyPlayerInput } from './input';
@@ -11,6 +11,13 @@ import { COLORS } from './constants';
 import { updateParticles, renderParticles, emitParticles } from './effects/particles';
 import { LoadedSprites, getCharacterSprites, CharacterSprites } from './spriteLoader';
 import { AnimationType } from './spriteLoader';
+import {
+  PlayerAnimationState,
+  createAnimationState,
+  updateAnimationState,
+  createAnimationContext,
+  getPlayerAnimation as getPlayerAnimationFromManager
+} from './animationManager';
 
 /**
  * Sprite sheet configuration: number of frames for each animation
@@ -36,12 +43,14 @@ const SPRITE_FRAME_COUNTS: Record<AnimationType, number> = {
 const ANIMATION_FPS = 10;
 
 /**
- * Initialize game state with game mode
+ * Initialize game state with game mode and character selections
  */
 export function initializeGameState(
   config: GameConfig = DEFAULT_CONFIG,
   gameMode: GameMode = 'versus',
-  difficulty: AIDifficulty = 'medium'
+  difficulty: AIDifficulty = 'medium',
+  player1Character: 1 | 2 | 3 = 1,
+  player2Character: 1 | 2 | 3 = 1
 ): GameState {
   // For practice mode, center the player
   const player1X = gameMode === 'practice'
@@ -50,6 +59,7 @@ export function initializeGameState(
 
   return {
     player1: {
+      characterId: player1Character,
       x: player1X,
       y: config.groundLevel - 100,
       score: 0,
@@ -61,8 +71,15 @@ export function initializeGameState(
       kickAnimationDuration: 150,
       lastX: player1X,
       facingLeft: false,
+      emotionTimer: 0,
+      lastEmotion: null,
+      animationTime: 0,
+      isDashing: false,
+      dashCooldown: 0,
+      dashDuration: 0,
     },
     player2: {
+      characterId: player2Character,
       x: (config.canvasWidth / 4) * 3 - 25,
       y: config.groundLevel - 100,
       score: 0,
@@ -74,6 +91,12 @@ export function initializeGameState(
       kickAnimationDuration: 150,
       lastX: (config.canvasWidth / 4) * 3 - 25,
       facingLeft: false,
+      emotionTimer: 0,
+      lastEmotion: null,
+      animationTime: 0,
+      isDashing: false,
+      dashCooldown: 0,
+      dashDuration: 0,
     },
     takyan: resetTakyan(config, gameMode === 'practice'),
     winner: null,
@@ -108,6 +131,10 @@ export function updateGameState(
     return { newState: state, particlesToEmit }; // Don't update if game is over or paused
   }
 
+  // Store previous positions BEFORE any updates (for movement detection)
+  const previousPlayer1X = state.player1.x;
+  const previousPlayer2X = state.player2.x;
+
   // Get difficulty multipliers for ball physics and player speed
   let ballSpeedMultiplier: number;
   let gravityMultiplier: number;
@@ -132,10 +159,26 @@ export function updateGameState(
   let newState = { ...state };
   const previousTakyanY = state.takyan.y;
 
-  // Update player 1 position based on input
+  // Handle dash for player 1
+  if (input.player1Dash && newState.player1.dashCooldown <= 0 && !newState.player1.isDashing) {
+    console.log('[DASH] Player 1 dash activated! Duration:', config.dashDuration, 'ms, Cooldown:', config.dashCooldownTime, 'ms');
+    newState.player1 = {
+      ...newState.player1,
+      isDashing: true,
+      dashDuration: config.dashDuration,
+      dashCooldown: config.dashCooldownTime,
+    };
+    console.log('[DASH AFTER SET] isDashing:', newState.player1.isDashing, 'dashDuration:', newState.player1.dashDuration);
+  }
+
+  // Update player 1 position based on input (with dash speed if dashing and character stats)
+  const player1CharStats = CHARACTER_STATS[newState.player1.characterId];
+  const player1Speed = newState.player1.isDashing
+    ? config.dashSpeed * playerSpeedMultiplier * player1CharStats.speedMultiplier
+    : config.playerSpeed * playerSpeedMultiplier * player1CharStats.speedMultiplier;
   const player1NewX = applyPlayerInput(
     state.player1.x,
-    config.playerSpeed * playerSpeedMultiplier,
+    player1Speed,
     input.player1Left,
     input.player1Right
   );
@@ -159,9 +202,25 @@ export function updateGameState(
 
   // Update player 2 position based on input (only in versus mode)
   if (state.gameMode === 'versus') {
+    // Handle dash for player 2
+    if (input.player2Dash && newState.player2.dashCooldown <= 0 && !newState.player2.isDashing) {
+      console.log('[DASH] Player 2 dash activated! Duration:', config.dashDuration, 'ms, Cooldown:', config.dashCooldownTime, 'ms');
+      newState.player2 = {
+        ...newState.player2,
+        isDashing: true,
+        dashDuration: config.dashDuration,
+        dashCooldown: config.dashCooldownTime,
+      };
+    }
+
+    // Update player 2 position with dash speed if dashing and character stats
+    const player2CharStats = CHARACTER_STATS[newState.player2.characterId];
+    const player2Speed = newState.player2.isDashing
+      ? config.dashSpeed * playerSpeedMultiplier * player2CharStats.speedMultiplier
+      : config.playerSpeed * playerSpeedMultiplier * player2CharStats.speedMultiplier;
     const player2NewX = applyPlayerInput(
       state.player2.x,
-      config.playerSpeed * playerSpeedMultiplier,
+      player2Speed,
       input.player2Left,
       input.player2Right
     );
@@ -191,7 +250,8 @@ export function updateGameState(
   // Check for player kicks
   if (input.player1Kick && checkPlayerCollision(state.takyan, state.player1)) {
     const direction = input.player1Left ? -1 : input.player1Right ? 1 : 0;
-    newState.takyan = applyKick(state.takyan, config, direction, ballSpeedMultiplier);
+    const player1PowerMultiplier = ballSpeedMultiplier * player1CharStats.powerMultiplier;
+    newState.takyan = applyKick(state.takyan, config, direction, player1PowerMultiplier);
     ballKicked = true;
     kickingPlayer = 1;
     newState.rallyCount += 1;
@@ -226,7 +286,9 @@ export function updateGameState(
   } else if (state.gameMode === 'versus' && input.player2Kick && checkPlayerCollision(state.takyan, state.player2)) {
     // Only allow player 2 kicks in versus mode
     const direction = input.player2Left ? -1 : input.player2Right ? 1 : 0;
-    newState.takyan = applyKick(state.takyan, config, direction, ballSpeedMultiplier);
+    const player2CharStats = CHARACTER_STATS[newState.player2.characterId];
+    const player2PowerMultiplier = ballSpeedMultiplier * player2CharStats.powerMultiplier;
+    newState.takyan = applyKick(state.takyan, config, direction, player2PowerMultiplier);
     ballKicked = true;
     kickingPlayer = 2;
     newState.rallyCount += 1;
@@ -288,6 +350,12 @@ export function updateGameState(
         newState.player2.score += 1;
         newState.lastScoringPlayer = 2;
 
+        // Trigger emotion animations: Player 2 Happy, Player 1 Angry
+        newState.player2.emotionTimer = 800; // 0.8 seconds
+        newState.player2.lastEmotion = 'Happy';
+        newState.player1.emotionTimer = 800;
+        newState.player1.lastEmotion = 'Angry';
+
         // Emit score particles for player 2
         if (config.enableParticles) {
           const player2Center = newState.player2.x + newState.player2.width / 2;
@@ -298,6 +366,12 @@ export function updateGameState(
       } else {
         newState.player1.score += 1;
         newState.lastScoringPlayer = 1;
+
+        // Trigger emotion animations: Player 1 Happy, Player 2 Angry
+        newState.player1.emotionTimer = 800; // 0.8 seconds
+        newState.player1.lastEmotion = 'Happy';
+        newState.player2.emotionTimer = 800;
+        newState.player2.lastEmotion = 'Angry';
 
         // Emit score particles for player 1
         if (config.enableParticles) {
@@ -355,18 +429,84 @@ export function updateGameState(
     }
   }
 
+  // Update emotion timers (both players)
+  if (newState.player1.emotionTimer > 0) {
+    newState.player1 = {
+      ...newState.player1,
+      emotionTimer: Math.max(0, newState.player1.emotionTimer - deltaTime),
+    };
+
+    // Clear emotion when timer expires
+    if (newState.player1.emotionTimer === 0) {
+      newState.player1.lastEmotion = null;
+    }
+  }
+
+  if (newState.player2.emotionTimer > 0) {
+    newState.player2 = {
+      ...newState.player2,
+      emotionTimer: Math.max(0, newState.player2.emotionTimer - deltaTime),
+    };
+
+    // Clear emotion when timer expires
+    if (newState.player2.emotionTimer === 0) {
+      newState.player2.lastEmotion = null;
+    }
+  }
+
+  // Update dash timers and cooldowns (both players)
+  console.log('[TIMER UPDATE] BEFORE - isDashing:', newState.player1.isDashing, 'dashDuration:', newState.player1.dashDuration, 'dashCooldown:', newState.player1.dashCooldown, 'deltaTime:', deltaTime);
+
+  if (newState.player1.isDashing) {
+    const newDashDuration = Math.max(0, newState.player1.dashDuration - deltaTime);
+    newState.player1 = {
+      ...newState.player1,
+      dashDuration: newDashDuration,
+      isDashing: newDashDuration > 0, // End dash when duration expires
+    };
+    console.log('[TIMER UPDATE] AFTER DASH - newDashDuration:', newDashDuration, 'isDashing:', newState.player1.isDashing);
+  }
+
+  if (newState.player1.dashCooldown > 0) {
+    newState.player1 = {
+      ...newState.player1,
+      dashCooldown: Math.max(0, newState.player1.dashCooldown - deltaTime),
+    };
+    console.log('[TIMER UPDATE] AFTER COOLDOWN - dashCooldown:', newState.player1.dashCooldown);
+  }
+
+  if (newState.player2.isDashing) {
+    const newDashDuration = Math.max(0, newState.player2.dashDuration - deltaTime);
+    newState.player2 = {
+      ...newState.player2,
+      dashDuration: newDashDuration,
+      isDashing: newDashDuration > 0, // End dash when duration expires
+    };
+  }
+
+  if (newState.player2.dashCooldown > 0) {
+    newState.player2 = {
+      ...newState.player2,
+      dashCooldown: Math.max(0, newState.player2.dashCooldown - deltaTime),
+    };
+  }
+
   // Update lastX positions for next frame's movement detection
+  // Use the PREVIOUS frame's position (stored at start of function)
   newState.player1 = {
     ...newState.player1,
-    lastX: newState.player1.x,
+    lastX: previousPlayer1X,
   };
 
   if (state.gameMode === 'versus') {
     newState.player2 = {
       ...newState.player2,
-      lastX: newState.player2.x,
+      lastX: previousPlayer2X,
     };
   }
+
+  // Debug logging for dash state (ALWAYS log to see what's happening)
+  console.log('[UPDATE END] Player 1 final state - isDashing:', newState.player1.isDashing, 'dashDuration:', newState.player1.dashDuration, 'dashCooldown:', newState.player1.dashCooldown);
 
   return { newState, particlesToEmit };
 }
@@ -383,6 +523,9 @@ export function renderGame(
   takyanImage?: HTMLImageElement | null,
   loadedSprites?: LoadedSprites | null
 ): void {
+  // Debug logging for dash state at render time (ALWAYS log)
+  console.log('[RENDER START] Player 1 state - isDashing:', state.player1.isDashing, 'dashDuration:', state.player1.dashDuration, 'dashCooldown:', state.player1.dashCooldown);
+
   // Apply screen shake
   ctx.save();
   ctx.translate(screenShakeOffset.offsetX, screenShakeOffset.offsetY);
@@ -421,8 +564,8 @@ export function renderGame(
   const player1Label = state.gameMode === 'practice' ? 'YOU' : 'P1';
 
   if (loadedSprites) {
-    // Use sprite rendering
-    const character1Sprites = getCharacterSprites(loadedSprites, 1);
+    // Use sprite rendering with player's selected character
+    const character1Sprites = getCharacterSprites(loadedSprites, state.player1.characterId);
     const animation1 = getPlayerAnimation(state.player1);
     drawSpritePlayer(ctx, state.player1, character1Sprites, COLORS.player1, COLORS.player1Glow, player1Label, animation1, state.player1.facingLeft);
   } else {
@@ -430,17 +573,23 @@ export function renderGame(
     drawModernPlayer(ctx, state.player1, COLORS.player1, COLORS.player1Glow, player1Label, state.gameMode);
   }
 
+  // Draw dash cooldown indicator for player 1
+  drawDashCooldownIndicator(ctx, state.player1, config, COLORS.player1);
+
   // === PLAYER 2: Sprite or modern neon pink character (only in versus mode) ===
   if (state.gameMode === 'versus') {
     if (loadedSprites) {
-      // Use sprite rendering
-      const character2Sprites = getCharacterSprites(loadedSprites, 1);
+      // Use sprite rendering with player's selected character
+      const character2Sprites = getCharacterSprites(loadedSprites, state.player2.characterId);
       const animation2 = getPlayerAnimation(state.player2);
       drawSpritePlayer(ctx, state.player2, character2Sprites, COLORS.player2, COLORS.player2Glow, 'P2', animation2, state.player2.facingLeft);
     } else {
       // Fallback to geometric rendering
       drawModernPlayer(ctx, state.player2, COLORS.player2, COLORS.player2Glow, 'P2', state.gameMode);
     }
+
+    // Draw dash cooldown indicator for player 2
+    drawDashCooldownIndicator(ctx, state.player2, config, COLORS.player2);
   }
 
   // === TAKYAN: Real image or fallback to rendered ===
@@ -459,21 +608,105 @@ export function renderGame(
 }
 
 /**
+ * Draw dash cooldown indicator above player
+ */
+function drawDashCooldownIndicator(
+  ctx: CanvasRenderingContext2D,
+  player: GameState['player1'],
+  config: GameConfig,
+  color: string
+): void {
+  const centerX = player.x + player.width / 2;
+  const indicatorY = player.y - 35;
+  const indicatorWidth = 50;
+  const indicatorHeight = 6;
+  const indicatorX = centerX - indicatorWidth / 2;
+
+  // Calculate cooldown progress (0 = ready, 1 = just used)
+  const cooldownProgress = Math.min(1, player.dashCooldown / config.dashCooldownTime);
+  const readyProgress = 1 - cooldownProgress;
+
+  ctx.save();
+
+  // Background bar (dark)
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  ctx.fillRect(indicatorX, indicatorY, indicatorWidth, indicatorHeight);
+
+  // Determine bar color based on state
+  let barColor: string;
+  if (player.isDashing) {
+    barColor = '#ffffff'; // White when actively dashing
+  } else if (cooldownProgress === 0) {
+    barColor = '#00ff88'; // Green when ready
+  } else {
+    barColor = '#ffaa00'; // Orange when recharging
+  }
+
+  // Foreground bar (shows ready progress or dash active)
+  if (player.isDashing) {
+    // Pulsing effect when dashing
+    const pulseAlpha = 0.8 + Math.sin(Date.now() / 100) * 0.2;
+    ctx.fillStyle = barColor;
+    ctx.globalAlpha = pulseAlpha;
+    ctx.fillRect(indicatorX, indicatorY, indicatorWidth, indicatorHeight);
+    ctx.globalAlpha = 1;
+  } else {
+    // Fill from left to right as cooldown recovers
+    ctx.fillStyle = barColor;
+    ctx.fillRect(indicatorX, indicatorY, indicatorWidth * readyProgress, indicatorHeight);
+  }
+
+  // Border
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(indicatorX, indicatorY, indicatorWidth, indicatorHeight);
+
+  // Glow effect when ready
+  if (cooldownProgress === 0 && !player.isDashing) {
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#00ff88';
+    ctx.strokeStyle = '#00ff88';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(indicatorX, indicatorY, indicatorWidth, indicatorHeight);
+  }
+
+  ctx.restore();
+}
+
+/**
  * Determine which animation to play based on player state
+ * Includes emotion animations (Happy/Angry/Fall) and dash animation
  */
 function getPlayerAnimation(player: GameState['player1']): AnimationType {
-  // Priority 1: Kicking animation
+  console.log('[GET ANIMATION] Checking - isDashing:', player.isDashing, 'isKicking:', player.isKicking, 'x:', player.x, 'lastX:', player.lastX, 'diff:', Math.abs(player.x - player.lastX));
+
+  // Priority 1: Emotion animations (Happy/Angry/Fall)
+  if (player.emotionTimer > 0 && player.lastEmotion) {
+    console.log('[GET ANIMATION] Returning emotion:', player.lastEmotion);
+    return player.lastEmotion as AnimationType;
+  }
+
+  // Priority 2: Dash animation
+  if (player.isDashing) {
+    console.log('[GET ANIMATION] Returning Dash (isDashing = TRUE)');
+    return 'Dash';
+  }
+
+  // Priority 3: Kicking animation
   if (player.isKicking) {
+    console.log('[GET ANIMATION] Returning Walk_attack (kicking)');
     return 'Walk_attack';
   }
 
-  // Priority 2: Walking animation (detect movement from position change)
+  // Priority 4: Walking animation (detect movement from position change)
   const isMoving = Math.abs(player.x - player.lastX) > 0.1;
   if (isMoving) {
+    console.log('[GET ANIMATION] Returning Walk (isMoving = TRUE)');
     return 'Walk';
   }
 
-  // Priority 3: Idle animation
+  // Priority 5: Idle animation
+  console.log('[GET ANIMATION] Returning Idle2 (default)');
   return 'Idle2';
 }
 
@@ -493,7 +726,36 @@ function drawSpritePlayer(
   const centerX = player.x + player.width / 2;
   const centerY = player.y + player.height / 2;
 
+  // Log when drawing Dash animation
+  if (animation === 'Dash' || player.isDashing) {
+    console.log('[RENDER] Drawing player with animation:', animation, 'isDashing:', player.isDashing);
+  }
+
   ctx.save();
+
+  // === DASH SPEED LINES: Trail effect when dashing ===
+  if (player.isDashing) {
+    const lineCount = 5;
+    const lineSpacing = 15;
+    const lineLength = 30;
+    const direction = player.facingLeft ? 1 : -1; // Opposite to movement direction
+
+    for (let i = 0; i < lineCount; i++) {
+      const alpha = (lineCount - i) / lineCount * 0.4;
+      const offsetX = (i * lineSpacing) * direction;
+      const startX = centerX + offsetX;
+      const endX = startX + (lineLength * direction);
+      const lineY = player.y + player.height / 2 + (i - lineCount / 2) * 10;
+
+      ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(startX, lineY);
+      ctx.lineTo(endX, lineY);
+      ctx.stroke();
+    }
+  }
 
   // === SHADOW: Beneath player ===
   ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
@@ -501,9 +763,9 @@ function drawSpritePlayer(
   ctx.ellipse(centerX, player.y + player.height + 5, player.width / 2, 8, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // === GLOW EFFECT: Around sprite ===
-  ctx.shadowBlur = 25;
-  ctx.shadowColor = glowColor;
+  // === GLOW EFFECT: Around sprite (enhanced when dashing) ===
+  ctx.shadowBlur = player.isDashing ? 40 : 25;
+  ctx.shadowColor = player.isDashing ? '#ffffff' : glowColor;
 
   // Get the sprite for current animation
   const sprite = sprites[animation];
@@ -876,7 +1138,9 @@ function roundRect(
 export function resetGame(
   config: GameConfig = DEFAULT_CONFIG,
   gameMode: GameMode = 'versus',
-  difficulty: AIDifficulty = 'medium'
+  difficulty: AIDifficulty = 'medium',
+  player1Character: 1 | 2 | 3 = 1,
+  player2Character: 1 | 2 | 3 = 1
 ): GameState {
-  return initializeGameState(config, gameMode, difficulty);
+  return initializeGameState(config, gameMode, difficulty, player1Character, player2Character);
 }

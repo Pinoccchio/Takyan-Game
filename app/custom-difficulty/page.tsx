@@ -7,17 +7,15 @@ export default function CustomDifficultyPage() {
   const router = useRouter();
 
   const handleStart = (settings: CustomDifficultyConfig) => {
-    // Build URL with custom parameters
+    // Build URL with custom parameters for character selection
+    const customSettings = `${settings.ballSpeedMultiplier},${settings.gravityMultiplier},${settings.playerSpeedMultiplier},${settings.winningScore}`;
     const params = new URLSearchParams({
       mode: 'versus',
       difficulty: 'custom',
-      ballSpeed: settings.ballSpeedMultiplier.toString(),
-      gravity: settings.gravityMultiplier.toString(),
-      playerSpeed: settings.playerSpeedMultiplier.toString(),
-      winScore: settings.winningScore.toString(),
+      custom: customSettings,
     });
 
-    router.push(`/game?${params.toString()}`);
+    router.push(`/character-select?${params.toString()}`);
   };
 
   const handleBack = () => {
