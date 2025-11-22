@@ -96,3 +96,33 @@ export function getKickDirection(
   if (player1Right) return 1;
   return 0;
 }
+
+/**
+ * Check if ball has hit the left or right wall boundaries
+ * Returns the updated takyan with bounced velocity if collision detected
+ */
+export function checkBallBoundaryCollision(takyan: Takyan, config: GameConfig): Takyan {
+  let newTakyan = { ...takyan };
+  let bounced = false;
+
+  // Check left wall collision
+  if (takyan.x - takyan.radius <= 0) {
+    newTakyan.x = takyan.radius; // Prevent ball from going through wall
+    newTakyan.velocityX = Math.abs(takyan.velocityX) * 0.8; // Bounce right with dampening
+    bounced = true;
+  }
+
+  // Check right wall collision
+  else if (takyan.x + takyan.radius >= config.canvasWidth) {
+    newTakyan.x = config.canvasWidth - takyan.radius; // Prevent ball from going through wall
+    newTakyan.velocityX = -Math.abs(takyan.velocityX) * 0.8; // Bounce left with dampening
+    bounced = true;
+  }
+
+  // Add slight rotation on bounce for visual effect
+  if (bounced) {
+    newTakyan.rotation = (newTakyan.rotation || 0) + 0.5;
+  }
+
+  return newTakyan;
+}

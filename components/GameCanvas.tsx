@@ -22,16 +22,37 @@ import Link from 'next/link';
 export default function GameCanvas() {
   const searchParams = useSearchParams();
   const mode = (searchParams.get('mode') || 'versus') as 'practice' | 'versus';
-  const difficulty = (searchParams.get('difficulty') || 'medium') as AIDifficulty; // Only used for practice mode
+  const difficulty = (searchParams.get('difficulty') || 'medium') as AIDifficulty | 'custom';
+
+  // Handle custom difficulty parameters
+  const isCustomDifficulty = difficulty === 'custom';
+  const customBallSpeed = isCustomDifficulty ? parseFloat(searchParams.get('ballSpeed') || '1.0') : 1.0;
+  const customGravity = isCustomDifficulty ? parseFloat(searchParams.get('gravity') || '1.0') : 1.0;
+  const customPlayerSpeed = isCustomDifficulty ? parseFloat(searchParams.get('playerSpeed') || '1.0') : 1.0;
+  const customWinScore = isCustomDifficulty ? parseInt(searchParams.get('winScore') || '10') : 10;
 
   const gameMode: GameMode = mode;
 
+  // Create custom config if using custom difficulty
+  const gameConfig = isCustomDifficulty ? {
+    ...DEFAULT_CONFIG,
+    winningScore: customWinScore,
+  } : DEFAULT_CONFIG;
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const gameStateRef = useRef<GameState>(initializeGameState(DEFAULT_CONFIG, gameMode, difficulty));
+  const gameStateRef = useRef<GameState>(initializeGameState(gameConfig, gameMode, difficulty === 'custom' ? 'medium' : difficulty));
   const inputStateRef = useRef<InputState>(createInputState());
   const particlesRef = useRef<Particle[]>([]);
   const screenShakeRef = useRef<ScreenShake | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+
+  // Store custom multipliers in a ref for use in game loop
+  const customMultipliersRef = useRef({
+    ballSpeed: customBallSpeed,
+    gravity: customGravity,
+    playerSpeed: customPlayerSpeed,
+    isCustom: isCustomDifficulty,
+  });
 
   const [score, setScore] = useState({ player1: 0, player2: 0 });
   const [winner, setWinner] = useState<null | 1 | 2>(null);
@@ -98,8 +119,8 @@ export default function GameCanvas() {
     if (!ctx) return;
 
     // Set canvas size
-    canvas.width = DEFAULT_CONFIG.canvasWidth;
-    canvas.height = DEFAULT_CONFIG.canvasHeight;
+    canvas.width = gameConfig.canvasWidth;
+    canvas.height = gameConfig.canvasHeight;
 
     let lastTime = performance.now();
 
@@ -115,7 +136,8 @@ export default function GameCanvas() {
         const updateResult = updateGameState(
           gameStateRef.current,
           finalInput,
-          DEFAULT_CONFIG
+          gameConfig,
+          customMultipliersRef.current
         );
 
         gameStateRef.current = updateResult.newState;
@@ -204,7 +226,7 @@ export default function GameCanvas() {
       renderGame(
         ctx,
         gameStateRef.current,
-        DEFAULT_CONFIG,
+        gameConfig,
         particlesRef.current,
         shakeOffset,
         takyanImageRef.current
@@ -249,7 +271,7 @@ export default function GameCanvas() {
   }, [score, winner, combo, rally]);
 
   const handleRestart = () => {
-    gameStateRef.current = resetGame(DEFAULT_CONFIG, gameMode, difficulty);
+    gameStateRef.current = resetGame(gameConfig, gameMode, difficulty === 'custom' ? 'medium' : difficulty);
     inputStateRef.current = createInputState();
     particlesRef.current = [];
     screenShakeRef.current = null;
@@ -294,12 +316,12 @@ export default function GameCanvas() {
       <ScoreBoard
         player1Score={score.player1}
         player2Score={score.player2}
-        winningScore={DEFAULT_CONFIG.winningScore}
+        winningScore={gameConfig.winningScore}
         practiceState={gameMode === 'practice' ? {
           ...practiceStats,
           lastDropTime: 0, // Not needed for display
         } : undefined}
-        difficulty={gameMode === 'practice' ? (difficulty as 'easy' | 'medium' | 'hard') : undefined}
+        difficulty={gameMode === 'practice' ? difficulty : undefined}
       />
 
       {/* Game Canvas Container */}

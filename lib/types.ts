@@ -145,6 +145,7 @@ export interface AIDifficultyConfig {
   movementSpeed: number; // Multiplier for AI movement speed
   ballSpeedMultiplier: number; // Multiplier for kick power (ball speed)
   gravityMultiplier: number; // Multiplier for gravity (affects ball float time)
+  playerSpeedMultiplier: number; // Multiplier for player movement speed
   name: string; // Display name
   description: string; // Description for UI
 }
@@ -155,10 +156,11 @@ export const AI_DIFFICULTIES: Record<AIDifficulty, AIDifficultyConfig> = {
     kickSuccessRate: 0.4,
     predictionAccuracy: 0.3,
     movementSpeed: 0.7,
-    ballSpeedMultiplier: 0.5,
-    gravityMultiplier: 0.6,
+    ballSpeedMultiplier: 0.4, // Much slower ball
+    gravityMultiplier: 0.5, // Ball floats much longer
+    playerSpeedMultiplier: 0.8, // Slightly slower player movement
     name: 'Easy',
-    description: 'Very slow ball, perfect for beginners',
+    description: 'Very slow ball with extra hang time',
   },
   medium: {
     reactionDelay: 100,
@@ -167,6 +169,7 @@ export const AI_DIFFICULTIES: Record<AIDifficulty, AIDifficultyConfig> = {
     movementSpeed: 1.0,
     ballSpeedMultiplier: 1.0,
     gravityMultiplier: 1.0,
+    playerSpeedMultiplier: 1.0,
     name: 'Medium',
     description: 'Normal speed, balanced challenge',
   },
@@ -175,9 +178,10 @@ export const AI_DIFFICULTIES: Record<AIDifficulty, AIDifficultyConfig> = {
     kickSuccessRate: 0.85,
     predictionAccuracy: 0.9,
     movementSpeed: 1.2,
-    ballSpeedMultiplier: 1.2,
-    gravityMultiplier: 1.1,
+    ballSpeedMultiplier: 1.5, // Much faster ball
+    gravityMultiplier: 1.3, // Ball falls faster
+    playerSpeedMultiplier: 1.2, // Faster player movement needed
     name: 'Hard',
-    description: 'Faster ball, expert opponent',
+    description: 'Fast ball with quick reactions required',
   },
 };

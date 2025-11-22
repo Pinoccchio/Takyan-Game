@@ -5,7 +5,7 @@
 
 import { GameState, InputState, GameConfig, DEFAULT_CONFIG, Particle, GameMode, AIDifficulty, AI_DIFFICULTIES } from './types';
 import { updateTakyanPhysics, applyKick, resetTakyan, applyAirResistance } from './physics';
-import { checkPlayerCollision, checkGroundCollision, determineScoringSide, keepPlayerInBounds } from './collision';
+import { checkPlayerCollision, checkGroundCollision, determineScoringSide, keepPlayerInBounds, checkBallBoundaryCollision } from './collision';
 import { applyPlayerInput } from './input';
 import { COLORS } from './constants';
 import { updateParticles, renderParticles, emitParticles } from './effects/particles';
@@ -70,7 +70,8 @@ export function initializeGameState(
 export function updateGameState(
   state: GameState,
   input: InputState,
-  config: GameConfig
+  config: GameConfig,
+  customMultipliers?: { ballSpeed: number; gravity: number; playerSpeed: number; isCustom: boolean }
 ): { newState: GameState; particlesToEmit: Particle[] } {
   let particlesToEmit: Particle[] = [];
 
@@ -78,13 +79,26 @@ export function updateGameState(
     return { newState: state, particlesToEmit }; // Don't update if game is over or paused
   }
 
-  // Get difficulty multipliers for ball physics (Practice mode only)
-  // Versus mode always uses normal/medium physics (1.0x multipliers)
-  const difficulty = state.gameMode === 'practice' && state.practiceState ?
-    state.practiceState.difficulty : 'medium';
-  const difficultyConfig = AI_DIFFICULTIES[difficulty];
-  const ballSpeedMultiplier = state.gameMode === 'practice' ? difficultyConfig.ballSpeedMultiplier : 1.0;
-  const gravityMultiplier = state.gameMode === 'practice' ? difficultyConfig.gravityMultiplier : 1.0;
+  // Get difficulty multipliers for ball physics and player speed
+  let ballSpeedMultiplier: number;
+  let gravityMultiplier: number;
+  let playerSpeedMultiplier: number;
+
+  if (customMultipliers && customMultipliers.isCustom) {
+    // Use custom difficulty settings
+    ballSpeedMultiplier = customMultipliers.ballSpeed;
+    gravityMultiplier = customMultipliers.gravity;
+    playerSpeedMultiplier = customMultipliers.playerSpeed;
+  } else {
+    // Use preset difficulty (Practice mode only)
+    // Versus mode always uses normal/medium physics (1.0x multipliers)
+    const difficulty = state.gameMode === 'practice' && state.practiceState ?
+      state.practiceState.difficulty : 'medium';
+    const difficultyConfig = AI_DIFFICULTIES[difficulty];
+    ballSpeedMultiplier = state.gameMode === 'practice' ? difficultyConfig.ballSpeedMultiplier : 1.0;
+    gravityMultiplier = state.gameMode === 'practice' ? difficultyConfig.gravityMultiplier : 1.0;
+    playerSpeedMultiplier = state.gameMode === 'practice' ? difficultyConfig.playerSpeedMultiplier : 1.0;
+  }
 
   let newState = { ...state };
   const previousTakyanY = state.takyan.y;
@@ -92,7 +106,7 @@ export function updateGameState(
   // Update player 1 position based on input
   const player1NewX = applyPlayerInput(
     state.player1.x,
-    config.playerSpeed,
+    config.playerSpeed * playerSpeedMultiplier,
     input.player1Left,
     input.player1Right
   );
@@ -111,7 +125,7 @@ export function updateGameState(
   if (state.gameMode === 'versus') {
     const player2NewX = applyPlayerInput(
       state.player2.x,
-      config.playerSpeed,
+      config.playerSpeed * playerSpeedMultiplier,
       input.player2Left,
       input.player2Right
     );
@@ -193,6 +207,9 @@ export function updateGameState(
   // Update takyan physics with difficulty-based gravity
   newState.takyan = updateTakyanPhysics(newState.takyan, config, 1, gravityMultiplier);
   newState.takyan = applyAirResistance(newState.takyan);
+
+  // Check for wall boundary collisions and bounce
+  newState.takyan = checkBallBoundaryCollision(newState.takyan, config);
 
   // Update takyan rotation (spin effect)
   newState.takyan.rotation = (state.takyan.rotation + Math.abs(newState.takyan.velocityX) * 0.1) % (Math.PI * 2);

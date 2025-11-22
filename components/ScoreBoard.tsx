@@ -11,7 +11,7 @@ interface ScoreBoardProps {
   player2Score: number;
   winningScore: number;
   practiceState?: PracticeState;
-  difficulty?: AIDifficulty;
+  difficulty?: AIDifficulty | 'custom';
 }
 
 export default function ScoreBoard({ player1Score, player2Score, winningScore, practiceState, difficulty }: ScoreBoardProps) {
@@ -19,12 +19,20 @@ export default function ScoreBoard({ player1Score, player2Score, winningScore, p
   const getDifficultyBadge = () => {
     if (!difficulty) return null;
 
-    const config = AI_DIFFICULTIES[difficulty];
     let badgeColor = COLORS.neonCyan;
+    let displayName = 'Custom';
 
-    if (difficulty === 'easy') badgeColor = '#00ff88';
-    else if (difficulty === 'medium') badgeColor = COLORS.neonPurple;
-    else if (difficulty === 'hard') badgeColor = COLORS.neonPink;
+    if (difficulty === 'custom') {
+      badgeColor = COLORS.neonOrange;
+      displayName = 'Custom';
+    } else {
+      const config = AI_DIFFICULTIES[difficulty];
+      displayName = config.name;
+
+      if (difficulty === 'easy') badgeColor = '#00ff88';
+      else if (difficulty === 'medium') badgeColor = COLORS.neonPurple;
+      else if (difficulty === 'hard') badgeColor = COLORS.neonPink;
+    }
 
     return (
       <div
@@ -36,7 +44,7 @@ export default function ScoreBoard({ player1Score, player2Score, winningScore, p
           boxShadow: `0 0 15px ${badgeColor}40`,
         }}
       >
-        {config.name}
+        {displayName}
       </div>
     );
   };

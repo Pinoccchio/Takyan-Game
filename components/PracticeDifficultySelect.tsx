@@ -249,6 +249,30 @@ export default function PracticeDifficultySelect() {
           </div>
         </motion.div>
 
+        {/* Custom Difficulty Button */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="mb-8 text-center"
+        >
+          <Link href="/practice-custom-difficulty">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="px-12 py-4 rounded-xl text-xl font-bold transition-all"
+              style={{
+                background: `linear-gradient(135deg, ${COLORS.neonPurple} 0%, ${COLORS.neonCyan} 100%)`,
+                color: COLORS.white,
+                boxShadow: `0 0 30px rgba(${hexToRgb(COLORS.neonPurple)}, 0.5)`,
+                border: `2px solid ${COLORS.neonPurple}`,
+              }}
+            >
+              🎛️ Custom Difficulty
+            </motion.button>
+          </Link>
+        </motion.div>
+
         {/* Back Button */}
         <motion.div
           initial={{ opacity: 0 }}

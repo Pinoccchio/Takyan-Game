@@ -153,6 +153,30 @@ export default function DifficultySelect() {
           </Link>
         </motion.div>
 
+        {/* Custom Difficulty Button */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="mb-12 text-center"
+        >
+          <Link href="/custom-difficulty">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="px-12 py-4 rounded-xl text-xl font-bold transition-all"
+              style={{
+                background: `linear-gradient(135deg, ${COLORS.neonCyan} 0%, ${COLORS.neonPurple} 100%)`,
+                color: COLORS.white,
+                boxShadow: `0 0 30px rgba(6, 182, 212, 0.5)`,
+                border: `2px solid ${COLORS.neonCyan}`,
+              }}
+            >
+              🎛️ Custom Settings
+            </motion.button>
+          </Link>
+        </motion.div>
+
         {/* Back Button */}
         <motion.div
           initial={{ opacity: 0 }}
