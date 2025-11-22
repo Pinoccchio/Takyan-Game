@@ -30,6 +30,8 @@ export interface Player {
   isKicking: boolean; // Whether player is currently in kick animation
   kickAnimationFrame: number; // Current frame of kick animation (0-1)
   kickAnimationDuration: number; // How long kick animation lasts in ms
+  lastX: number; // Last X position for movement detection
+  facingLeft: boolean; // Which direction player is facing
 }
 
 export interface Takyan {

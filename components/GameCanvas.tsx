@@ -13,6 +13,7 @@ import { createInputState, handleKeyDown, handleKeyUp } from '@/lib/input';
 import { updateParticles } from '@/lib/effects/particles';
 import { calculateScreenShake, createScreenShake, isShakeActive } from '@/lib/effects/screenEffects';
 import { SCREEN_SHAKE, COLORS } from '@/lib/constants';
+import { loadAllSprites, LoadedSprites } from '@/lib/spriteLoader';
 import ScoreBoard from './ScoreBoard';
 import GameOver from './GameOver';
 import Controls from './Controls';
@@ -60,6 +61,8 @@ export default function GameCanvas() {
   const [rally, setRally] = useState(0);
   const [practiceStats, setPracticeStats] = useState({ currentStreak: 0, personalBest: 0, totalKicks: 0 });
   const takyanImageRef = useRef<HTMLImageElement | null>(null);
+  const [loadedSprites, setLoadedSprites] = useState<LoadedSprites | null>(null);
+  const [spritesLoading, setSpritesLoading] = useState(true);
 
   // Load takyan image
   useEffect(() => {
@@ -71,6 +74,34 @@ export default function GameCanvas() {
     image.onerror = () => {
       console.warn('Failed to load takyan image, using fallback rendering');
     };
+  }, []);
+
+  // Load character sprites
+  useEffect(() => {
+    console.log('[GAME] GameCanvas mounted, starting sprite loading...');
+    const loadSprites = async () => {
+      try {
+        console.log('[GAME] Setting spritesLoading = true');
+        setSpritesLoading(true);
+
+        console.log('[GAME] Calling loadAllSprites()...');
+        const sprites = await loadAllSprites();
+
+        console.log('[GAME] loadAllSprites() returned successfully!');
+        console.log('[GAME] Setting loadedSprites state...');
+        setLoadedSprites(sprites);
+        console.log('[GAME] ✅ loadedSprites state set successfully');
+      } catch (error) {
+        console.error('[GAME] ❌ Failed to load character sprites:', error);
+        console.warn('[GAME] ⚠️  Using fallback geometric rendering');
+      } finally {
+        console.log('[GAME] Setting spritesLoading = false');
+        setSpritesLoading(false);
+        console.log('[GAME] Sprite loading process complete');
+      }
+    };
+
+    loadSprites();
   }, []);
 
   // Handle keyboard input
@@ -223,14 +254,47 @@ export default function GameCanvas() {
       }
 
       // === RENDER GAME ===
-      renderGame(
-        ctx,
-        gameStateRef.current,
-        gameConfig,
-        particlesRef.current,
-        shakeOffset,
-        takyanImageRef.current
-      );
+      // Show loading screen while sprites are loading
+      if (spritesLoading) {
+        // Only log every 60 frames to avoid console spam
+        if (Math.random() < 0.016) {
+          console.log('[GAME LOOP] Rendering loading screen... spritesLoading =', spritesLoading, 'loadedSprites =', loadedSprites ? 'SET' : 'NULL');
+        }
+
+        ctx.fillStyle = '#0f0f1e';
+        ctx.fillRect(0, 0, gameConfig.canvasWidth, gameConfig.canvasHeight);
+
+        ctx.save();
+        ctx.fillStyle = '#00d4ff';
+        ctx.font = 'bold 24px Arial';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#00d4ff';
+        ctx.fillText('Loading Character Sprites...', gameConfig.canvasWidth / 2, gameConfig.canvasHeight / 2 - 20);
+
+        ctx.fillStyle = '#a0a0a0';
+        ctx.font = '16px Arial';
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = '#a0a0a0';
+        ctx.fillText('Please wait', gameConfig.canvasWidth / 2, gameConfig.canvasHeight / 2 + 20);
+        ctx.restore();
+      } else {
+        // Log once when transitioning to game rendering
+        if (Math.random() < 0.016) {
+          console.log('[GAME LOOP] Rendering game... spritesLoading =', spritesLoading, 'loadedSprites =', loadedSprites ? 'SET' : 'NULL');
+        }
+
+        // Render game (will use sprites if loaded, fallback geometric shapes if not)
+        renderGame(
+          ctx,
+          gameStateRef.current,
+          gameConfig,
+          particlesRef.current,
+          shakeOffset,
+          takyanImageRef.current,
+          loadedSprites
+        );
+      }
 
       // === RENDER HUD TEXT (combo/rally) ===
       if (combo > 2) {
@@ -268,7 +332,7 @@ export default function GameCanvas() {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [score, winner, combo, rally]);
+  }, [score, winner, combo, rally, spritesLoading, loadedSprites]);
 
   const handleRestart = () => {
     gameStateRef.current = resetGame(gameConfig, gameMode, difficulty === 'custom' ? 'medium' : difficulty);
@@ -320,12 +384,28 @@ export default function GameCanvas() {
         practiceState={gameMode === 'practice' ? {
           ...practiceStats,
           lastDropTime: 0, // Not needed for display
+          difficulty: difficulty === 'custom' ? 'medium' : difficulty as AIDifficulty,
         } : undefined}
         difficulty={gameMode === 'practice' ? difficulty : undefined}
       />
 
       {/* Game Canvas Container */}
       <div className="relative rounded-lg shadow-2xl overflow-hidden" style={{ boxShadow: '0 0 60px rgba(0, 212, 255, 0.4)' }}>
+        {spritesLoading && (
+          <div
+            className="absolute inset-0 flex items-center justify-center z-50"
+            style={{ background: 'rgba(15, 15, 30, 0.9)' }}
+          >
+            <div className="text-center">
+              <div className="text-xl font-bold mb-2" style={{ color: COLORS.neonCyan }}>
+                Loading Character Sprites...
+              </div>
+              <div className="text-sm" style={{ color: COLORS.lightGray }}>
+                Please wait
+              </div>
+            </div>
+          </div>
+        )}
         <canvas
           ref={canvasRef}
           className="block"

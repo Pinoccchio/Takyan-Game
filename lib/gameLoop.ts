@@ -9,6 +9,31 @@ import { checkPlayerCollision, checkGroundCollision, determineScoringSide, keepP
 import { applyPlayerInput } from './input';
 import { COLORS } from './constants';
 import { updateParticles, renderParticles, emitParticles } from './effects/particles';
+import { LoadedSprites, getCharacterSprites, CharacterSprites } from './spriteLoader';
+import { AnimationType } from './spriteLoader';
+
+/**
+ * Sprite sheet configuration: number of frames for each animation
+ */
+const SPRITE_FRAME_COUNTS: Record<AnimationType, number> = {
+  Idle2: 6,
+  Walk: 6,
+  Walk_attack: 6,
+  Dash: 6,
+  Happy: 6,
+  Angry: 6,
+  Fall: 6,
+  Hang: 6,
+  Pullup: 6,
+  Sitdown: 6,
+  Talk: 6,
+  Use: 6,
+};
+
+/**
+ * Animation frame rate (frames per second for sprite animations)
+ */
+const ANIMATION_FPS = 10;
 
 /**
  * Initialize game state with game mode
@@ -34,6 +59,8 @@ export function initializeGameState(
       isKicking: false,
       kickAnimationFrame: 0,
       kickAnimationDuration: 150,
+      lastX: player1X,
+      facingLeft: false,
     },
     player2: {
       x: (config.canvasWidth / 4) * 3 - 25,
@@ -45,6 +72,8 @@ export function initializeGameState(
       isKicking: false,
       kickAnimationFrame: 0,
       kickAnimationDuration: 150,
+      lastX: (config.canvasWidth / 4) * 3 - 25,
+      facingLeft: false,
     },
     takyan: resetTakyan(config, gameMode === 'practice'),
     winner: null,
@@ -116,6 +145,13 @@ export function updateGameState(
     state.gameMode === 'practice'
   );
 
+  // Update facing direction for player 1
+  if (input.player1Left) {
+    newState.player1.facingLeft = true;
+  } else if (input.player1Right) {
+    newState.player1.facingLeft = false;
+  }
+
   // Animate player 1 rotation (leg movement)
   if (input.player1Left || input.player1Right) {
     newState.player1.rotation = (state.player1.rotation + 0.3) % (Math.PI * 2);
@@ -134,6 +170,13 @@ export function updateGameState(
       config,
       false
     );
+
+    // Update facing direction for player 2
+    if (input.player2Left) {
+      newState.player2.facingLeft = true;
+    } else if (input.player2Right) {
+      newState.player2.facingLeft = false;
+    }
 
     // Animate player 2 rotation
     if (input.player2Left || input.player2Right) {
@@ -312,6 +355,19 @@ export function updateGameState(
     }
   }
 
+  // Update lastX positions for next frame's movement detection
+  newState.player1 = {
+    ...newState.player1,
+    lastX: newState.player1.x,
+  };
+
+  if (state.gameMode === 'versus') {
+    newState.player2 = {
+      ...newState.player2,
+      lastX: newState.player2.x,
+    };
+  }
+
   return { newState, particlesToEmit };
 }
 
@@ -324,7 +380,8 @@ export function renderGame(
   config: GameConfig,
   particles: Particle[],
   screenShakeOffset: { offsetX: number; offsetY: number } = { offsetX: 0, offsetY: 0 },
-  takyanImage?: HTMLImageElement | null
+  takyanImage?: HTMLImageElement | null,
+  loadedSprites?: LoadedSprites | null
 ): void {
   // Apply screen shake
   ctx.save();
@@ -360,13 +417,30 @@ export function renderGame(
   ctx.setLineDash([]);
   ctx.shadowBlur = 0;
 
-  // === PLAYER 1: Modern neon cyan character ===
+  // === PLAYER 1: Sprite or modern neon cyan character ===
   const player1Label = state.gameMode === 'practice' ? 'YOU' : 'P1';
-  drawModernPlayer(ctx, state.player1, COLORS.player1, COLORS.player1Glow, player1Label, state.gameMode);
 
-  // === PLAYER 2: Modern neon pink character (only in versus mode) ===
+  if (loadedSprites) {
+    // Use sprite rendering
+    const character1Sprites = getCharacterSprites(loadedSprites, 1);
+    const animation1 = getPlayerAnimation(state.player1);
+    drawSpritePlayer(ctx, state.player1, character1Sprites, COLORS.player1, COLORS.player1Glow, player1Label, animation1, state.player1.facingLeft);
+  } else {
+    // Fallback to geometric rendering
+    drawModernPlayer(ctx, state.player1, COLORS.player1, COLORS.player1Glow, player1Label, state.gameMode);
+  }
+
+  // === PLAYER 2: Sprite or modern neon pink character (only in versus mode) ===
   if (state.gameMode === 'versus') {
-    drawModernPlayer(ctx, state.player2, COLORS.player2, COLORS.player2Glow, 'P2', state.gameMode);
+    if (loadedSprites) {
+      // Use sprite rendering
+      const character2Sprites = getCharacterSprites(loadedSprites, 1);
+      const animation2 = getPlayerAnimation(state.player2);
+      drawSpritePlayer(ctx, state.player2, character2Sprites, COLORS.player2, COLORS.player2Glow, 'P2', animation2, state.player2.facingLeft);
+    } else {
+      // Fallback to geometric rendering
+      drawModernPlayer(ctx, state.player2, COLORS.player2, COLORS.player2Glow, 'P2', state.gameMode);
+    }
   }
 
   // === TAKYAN: Real image or fallback to rendered ===
@@ -382,6 +456,151 @@ export function renderGame(
   }
 
   ctx.restore();
+}
+
+/**
+ * Determine which animation to play based on player state
+ */
+function getPlayerAnimation(player: GameState['player1']): AnimationType {
+  // Priority 1: Kicking animation
+  if (player.isKicking) {
+    return 'Walk_attack';
+  }
+
+  // Priority 2: Walking animation (detect movement from position change)
+  const isMoving = Math.abs(player.x - player.lastX) > 0.1;
+  if (isMoving) {
+    return 'Walk';
+  }
+
+  // Priority 3: Idle animation
+  return 'Idle2';
+}
+
+/**
+ * Draw player using sprite animation
+ */
+function drawSpritePlayer(
+  ctx: CanvasRenderingContext2D,
+  player: GameState['player1'],
+  sprites: CharacterSprites,
+  color: string,
+  glowColor: string,
+  label: string,
+  animation: AnimationType = 'Idle2',
+  facingLeft: boolean = false
+): void {
+  const centerX = player.x + player.width / 2;
+  const centerY = player.y + player.height / 2;
+
+  ctx.save();
+
+  // === SHADOW: Beneath player ===
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+  ctx.beginPath();
+  ctx.ellipse(centerX, player.y + player.height + 5, player.width / 2, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // === GLOW EFFECT: Around sprite ===
+  ctx.shadowBlur = 25;
+  ctx.shadowColor = glowColor;
+
+  // Get the sprite for current animation
+  const sprite = sprites[animation];
+
+  if (sprite && sprite.complete) {
+    // Calculate which frame to display from sprite sheet
+    const frameCount = SPRITE_FRAME_COUNTS[animation];
+    const currentTime = Date.now() / 1000; // Current time in seconds
+    const currentFrame = Math.floor(currentTime * ANIMATION_FPS) % frameCount;
+
+    // Calculate frame dimensions in the sprite sheet
+    const frameWidth = sprite.width / frameCount;
+    const frameHeight = sprite.height;
+
+    // Source rectangle (which frame to extract from sprite sheet)
+    const sourceX = currentFrame * frameWidth;
+    const sourceY = 0;
+
+    // Calculate display dimensions (maintain aspect ratio of single frame)
+    const spriteDisplayHeight = player.height + 20; // Slightly larger than hitbox
+    const frameAspectRatio = frameWidth / frameHeight;
+    const spriteDisplayWidth = spriteDisplayHeight * frameAspectRatio;
+
+    // Position sprite centered on player hitbox
+    const spriteX = centerX - spriteDisplayWidth / 2;
+    const spriteY = player.y - 10; // Slightly above for better alignment
+
+    // Flip sprite if facing left
+    if (facingLeft) {
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.scale(-1, 1);
+      ctx.translate(-centerX, -centerY);
+    }
+
+    // Draw single frame from sprite sheet with glow
+    ctx.drawImage(
+      sprite,
+      sourceX, sourceY, frameWidth, frameHeight,  // Source rectangle (which frame)
+      spriteX, spriteY, spriteDisplayWidth, spriteDisplayHeight  // Destination rectangle
+    );
+
+    if (facingLeft) {
+      ctx.restore();
+    }
+  } else {
+    // Fallback to geometric rendering if sprite not loaded
+    ctx.shadowBlur = 0;
+    drawModernPlayerFallback(ctx, player, color, glowColor);
+  }
+
+  ctx.shadowBlur = 0;
+
+  // === LABEL: Player name with glow ===
+  ctx.fillStyle = COLORS.white;
+  ctx.font = 'bold 16px "Arial", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.shadowBlur = 10;
+  ctx.shadowColor = color;
+  ctx.fillText(label, centerX, player.y - 15);
+
+  ctx.restore();
+}
+
+/**
+ * Fallback geometric player rendering (used when sprite fails)
+ */
+function drawModernPlayerFallback(
+  ctx: CanvasRenderingContext2D,
+  player: GameState['player1'],
+  color: string,
+  glowColor: string
+): void {
+  // === BODY: Gradient filled rounded rectangle ===
+  const bodyGradient = ctx.createLinearGradient(player.x, player.y, player.x, player.y + player.height);
+  bodyGradient.addColorStop(0, color);
+  bodyGradient.addColorStop(1, color + '88'); // Semi-transparent bottom
+
+  ctx.fillStyle = bodyGradient;
+  ctx.shadowBlur = 20;
+  ctx.shadowColor = glowColor;
+
+  // Rounded body
+  roundRect(ctx, player.x + 5, player.y, player.width - 10, player.height - 30, 10);
+  ctx.fill();
+
+  // === LEGS: Simple legs ===
+  ctx.fillStyle = color;
+  ctx.shadowBlur = 10;
+
+  // Left leg
+  roundRect(ctx, player.x + 10, player.y + player.height - 30, 15, 25, 5);
+  ctx.fill();
+
+  // Right leg
+  roundRect(ctx, player.x + player.width - 25, player.y + player.height - 30, 15, 25, 5);
+  ctx.fill();
 }
 
 /**
