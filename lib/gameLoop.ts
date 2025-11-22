@@ -183,7 +183,7 @@ export function updateGameState(
     input.player1Right
   );
   newState.player1 = keepPlayerInBounds(
-    { ...state.player1, x: player1NewX },
+    { ...newState.player1, x: player1NewX },
     config,
     state.gameMode === 'practice'
   );
@@ -225,7 +225,7 @@ export function updateGameState(
       input.player2Right
     );
     newState.player2 = keepPlayerInBounds(
-      { ...state.player2, x: player2NewX },
+      { ...newState.player2, x: player2NewX },
       config,
       false
     );
