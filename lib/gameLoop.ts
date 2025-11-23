@@ -167,7 +167,7 @@ export function updateGameState(
         ...newState.player1,
         isDashing: true,
         dashDuration: config.dashDuration,
-        dashCooldown: config.dashCooldownTime,
+        dashCooldown: 0, // Don't start cooldown yet - it starts when dash ends
       };
       console.log('[DASH AFTER SET] isDashing:', newState.player1.isDashing, 'dashDuration:', newState.player1.dashDuration);
     } else {
@@ -216,7 +216,7 @@ export function updateGameState(
         ...newState.player2,
         isDashing: true,
         dashDuration: config.dashDuration,
-        dashCooldown: config.dashCooldownTime,
+        dashCooldown: 0, // Don't start cooldown yet - it starts when dash ends
       };
     }
 
@@ -469,12 +469,14 @@ export function updateGameState(
 
   if (newState.player1.isDashing) {
     const newDashDuration = Math.max(0, newState.player1.dashDuration - deltaTime);
+    const dashEnding = newDashDuration === 0; // Dash is ending this frame
     newState.player1 = {
       ...newState.player1,
       dashDuration: newDashDuration,
       isDashing: newDashDuration > 0, // End dash when duration expires
+      dashCooldown: dashEnding ? config.dashCooldownTime : newState.player1.dashCooldown, // Start cooldown when dash ends
     };
-    console.log('[TIMER UPDATE] AFTER DASH - newDashDuration:', newDashDuration, 'isDashing:', newState.player1.isDashing);
+    console.log('[TIMER UPDATE] AFTER DASH - newDashDuration:', newDashDuration, 'isDashing:', newState.player1.isDashing, 'dashEnding:', dashEnding);
   }
 
   if (newState.player1.dashCooldown > 0) {
@@ -489,10 +491,12 @@ export function updateGameState(
 
   if (newState.player2.isDashing) {
     const newDashDuration = Math.max(0, newState.player2.dashDuration - deltaTime);
+    const dashEnding = newDashDuration === 0; // Dash is ending this frame
     newState.player2 = {
       ...newState.player2,
       dashDuration: newDashDuration,
       isDashing: newDashDuration > 0, // End dash when duration expires
+      dashCooldown: dashEnding ? config.dashCooldownTime : newState.player2.dashCooldown, // Start cooldown when dash ends
     };
   }
 
