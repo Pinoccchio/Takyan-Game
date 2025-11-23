@@ -160,15 +160,19 @@ export function updateGameState(
   const previousTakyanY = state.takyan.y;
 
   // Handle dash for player 1
-  if (input.player1Dash && newState.player1.dashCooldown <= 0 && !newState.player1.isDashing) {
-    console.log('[DASH] Player 1 dash activated! Duration:', config.dashDuration, 'ms, Cooldown:', config.dashCooldownTime, 'ms');
-    newState.player1 = {
-      ...newState.player1,
-      isDashing: true,
-      dashDuration: config.dashDuration,
-      dashCooldown: config.dashCooldownTime,
-    };
-    console.log('[DASH AFTER SET] isDashing:', newState.player1.isDashing, 'dashDuration:', newState.player1.dashDuration);
+  if (input.player1Dash) {
+    if (newState.player1.dashCooldown <= 0 && !newState.player1.isDashing) {
+      console.log('[DASH] Player 1 dash activated! Duration:', config.dashDuration, 'ms, Cooldown:', config.dashCooldownTime, 'ms');
+      newState.player1 = {
+        ...newState.player1,
+        isDashing: true,
+        dashDuration: config.dashDuration,
+        dashCooldown: config.dashCooldownTime,
+      };
+      console.log('[DASH AFTER SET] isDashing:', newState.player1.isDashing, 'dashDuration:', newState.player1.dashDuration);
+    } else {
+      console.log('[DASH BLOCKED] Player 1 - Cooldown:', newState.player1.dashCooldown.toFixed(2), 'ms remaining, isDashing:', newState.player1.isDashing);
+    }
   }
 
   // Update player 1 position based on input (with dash speed if dashing and character stats)
@@ -176,12 +180,15 @@ export function updateGameState(
   const player1Speed = newState.player1.isDashing
     ? config.dashSpeed * playerSpeedMultiplier * player1CharStats.speedMultiplier
     : config.playerSpeed * playerSpeedMultiplier * player1CharStats.speedMultiplier;
+
+  // Apply player input for movement
   const player1NewX = applyPlayerInput(
     state.player1.x,
     player1Speed,
     input.player1Left,
     input.player1Right
   );
+
   newState.player1 = keepPlayerInBounds(
     { ...newState.player1, x: player1NewX },
     config,
@@ -218,12 +225,15 @@ export function updateGameState(
     const player2Speed = newState.player2.isDashing
       ? config.dashSpeed * playerSpeedMultiplier * player2CharStats.speedMultiplier
       : config.playerSpeed * playerSpeedMultiplier * player2CharStats.speedMultiplier;
+
+    // Apply player input for movement
     const player2NewX = applyPlayerInput(
       state.player2.x,
       player2Speed,
       input.player2Left,
       input.player2Right
     );
+
     newState.player2 = keepPlayerInBounds(
       { ...newState.player2, x: player2NewX },
       config,
@@ -468,11 +478,13 @@ export function updateGameState(
   }
 
   if (newState.player1.dashCooldown > 0) {
+    const previousCooldown = newState.player1.dashCooldown;
+    const newCooldown = Math.max(0, newState.player1.dashCooldown - deltaTime);
     newState.player1 = {
       ...newState.player1,
-      dashCooldown: Math.max(0, newState.player1.dashCooldown - deltaTime),
+      dashCooldown: newCooldown,
     };
-    console.log('[TIMER UPDATE] AFTER COOLDOWN - dashCooldown:', newState.player1.dashCooldown);
+    console.log('[COOLDOWN] Player 1 - Previous:', previousCooldown.toFixed(2), 'New:', newCooldown.toFixed(2), 'Delta:', deltaTime.toFixed(2), 'Progress:', ((1 - newCooldown / config.dashCooldownTime) * 100).toFixed(1) + '%', 'Ready:', newCooldown === 0);
   }
 
   if (newState.player2.isDashing) {
@@ -625,6 +637,11 @@ function drawDashCooldownIndicator(
   // Calculate cooldown progress (0 = ready, 1 = just used)
   const cooldownProgress = Math.min(1, player.dashCooldown / config.dashCooldownTime);
   const readyProgress = 1 - cooldownProgress;
+
+  // Debug logging for bar rendering
+  if (player.dashCooldown > 0 || player.isDashing) {
+    console.log('[BAR RENDER] dashCooldown:', player.dashCooldown.toFixed(2), 'cooldownProgress:', (cooldownProgress * 100).toFixed(1) + '%', 'readyProgress:', (readyProgress * 100).toFixed(1) + '%', 'barWidth:', (indicatorWidth * readyProgress).toFixed(1) + 'px');
+  }
 
   ctx.save();
 

@@ -8,7 +8,7 @@
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useState } from 'react';
-import { Star, Target } from 'lucide-react';
+import { Star, Target, Sliders } from 'lucide-react';
 import { COLORS } from '@/lib/constants';
 import { AI_DIFFICULTIES, AIDifficulty } from '@/lib/types';
 
@@ -256,19 +256,20 @@ export default function PracticeDifficultySelect() {
           transition={{ duration: 0.6, delay: 0.3 }}
           className="mb-8 text-center"
         >
-          <Link href="/practice-custom-difficulty">
+          <Link href="/practice-custom-difficulty" className="inline-block">
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="px-12 py-4 rounded-xl text-xl font-bold transition-all"
+              className="px-12 py-4 rounded-xl text-xl font-bold transition-all flex items-center justify-center gap-2"
               style={{
-                background: `linear-gradient(135deg, ${COLORS.neonPurple} 0%, ${COLORS.neonCyan} 100%)`,
+                background: `linear-gradient(135deg, ${COLORS.neonOrange} 0%, ${COLORS.neonOrange}CC 100%)`,
                 color: COLORS.white,
-                boxShadow: `0 0 30px rgba(${hexToRgb(COLORS.neonPurple)}, 0.5)`,
-                border: `2px solid ${COLORS.neonPurple}`,
+                boxShadow: `0 0 30px rgba(${hexToRgb(COLORS.neonOrange)}, 0.6)`,
+                border: `2px solid ${COLORS.neonOrange}`,
               }}
             >
-              🎛️ Custom Difficulty
+              <Sliders className="w-5 h-5" />
+              Advanced Settings
             </motion.button>
           </Link>
         </motion.div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CHARACTER_STATS, type CharacterType } from '@/lib/types';
@@ -34,6 +34,13 @@ export default function CharacterSelection() {
     3: { characterId: 3, currentEmotion: 'idle', isAnimating: false },
   });
 
+  // Ref to store interval IDs for cleanup
+  const previewIntervalsRef = useRef<Record<CharacterType, NodeJS.Timeout | null>>({
+    1: null,
+    2: null,
+    3: null,
+  });
+
   // Sprite loading state
   const [loadedSprites, setLoadedSprites] = useState<Record<CharacterType, Record<string, HTMLImageElement>>>({
     1: {},
@@ -41,9 +48,41 @@ export default function CharacterSelection() {
     3: {},
   });
   const [spritesLoading, setSpritesLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState({ loaded: 0, total: 15 });
 
-  // Load character sprites
+  // Load character sprites with retry logic
   useEffect(() => {
+    const loadSpriteWithRetry = async (
+      charId: CharacterType,
+      emotion: string,
+      retries = 3
+    ): Promise<HTMLImageElement | null> => {
+      for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+          const img = new Image();
+          const promise = new Promise<HTMLImageElement>((resolve, reject) => {
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error(`Failed to load image`));
+            img.src = `/characters/${charId}/${emotion}.png`;
+          });
+
+          const loadedImg = await promise;
+          if (attempt > 1) {
+            console.log(`✅ Loaded ${emotion} for character ${charId} after ${attempt} attempts`);
+          }
+          return loadedImg;
+        } catch (error) {
+          if (attempt === retries) {
+            console.error(`❌ Failed to load ${emotion} for character ${charId} after ${retries} attempts:`, error);
+            return null;
+          }
+          // Wait before retry (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 100 * attempt));
+        }
+      }
+      return null;
+    };
+
     const loadSprites = async () => {
       const sprites: Record<CharacterType, Record<string, HTMLImageElement>> = {
         1: {},
@@ -53,23 +92,36 @@ export default function CharacterSelection() {
 
       const emotionTypes = ['Idle2', 'Happy', 'Angry', 'Fall', 'Dash'];
       const characters: CharacterType[] = [1, 2, 3];
+      const totalSprites = characters.length * emotionTypes.length;
+
+      console.log('🎨 Starting sprite preloading...');
+      console.log(`📊 Total sprites to load: ${totalSprites}`);
+
+      let totalLoaded = 0;
+      let totalFailed = 0;
 
       for (const charId of characters) {
         for (const emotion of emotionTypes) {
-          const img = new Image();
-          const promise = new Promise<void>((resolve, reject) => {
-            img.onload = () => resolve();
-            img.onerror = () => reject();
-            img.src = `/characters/${charId}/${emotion}.png`;
-          });
-
-          try {
-            await promise;
+          const img = await loadSpriteWithRetry(charId, emotion);
+          if (img) {
             sprites[charId][emotion] = img;
-          } catch (error) {
-            console.error(`Failed to load ${emotion} for character ${charId}`, error);
+            totalLoaded++;
+            console.log(`📦 Loaded: /characters/${charId}/${emotion}.png (${totalLoaded}/${totalSprites})`);
+          } else {
+            totalFailed++;
+            console.error(`❌ FAILED: /characters/${charId}/${emotion}.png`);
           }
+
+          // Update progress
+          setLoadingProgress({ loaded: totalLoaded + totalFailed, total: totalSprites });
         }
+      }
+
+      console.log(`✅ Sprite preloading complete: ${totalLoaded} loaded, ${totalFailed} failed`);
+
+      // Only proceed if ALL sprites loaded successfully
+      if (totalFailed > 0) {
+        console.error(`⚠️ WARNING: ${totalFailed} sprites failed to load. Character selection may have issues.`);
       }
 
       setLoadedSprites(sprites);
@@ -98,14 +150,33 @@ export default function CharacterSelection() {
     handleCharacterSelect(randomChar);
   }, [handleCharacterSelect]);
 
+  // Cleanup intervals on unmount
+  useEffect(() => {
+    return () => {
+      // Clear all preview intervals when component unmounts
+      Object.values(previewIntervalsRef.current).forEach(interval => {
+        if (interval) clearInterval(interval);
+      });
+    };
+  }, []);
+
   // Emotion preview cycle
   const playEmotionPreview = useCallback((characterId: CharacterType) => {
-    if (previews[characterId].isAnimating) return;
+    // Clear any existing interval for this character
+    if (previewIntervalsRef.current[characterId]) {
+      clearInterval(previewIntervalsRef.current[characterId]!);
+      previewIntervalsRef.current[characterId] = null;
+    }
 
-    setPreviews(prev => ({
-      ...prev,
-      [characterId]: { ...prev[characterId], isAnimating: true },
-    }));
+    setPreviews(prev => {
+      // Don't start if already animating
+      if (prev[characterId].isAnimating) return prev;
+
+      return {
+        ...prev,
+        [characterId]: { ...prev[characterId], isAnimating: true },
+      };
+    });
 
     const emotions: EmotionState[] = ['happy', 'angry', 'fall', 'idle'];
     let currentIndex = 0;
@@ -119,13 +190,17 @@ export default function CharacterSelection() {
         currentIndex++;
       } else {
         clearInterval(interval);
+        previewIntervalsRef.current[characterId] = null;
         setPreviews(prev => ({
           ...prev,
           [characterId]: { ...prev[characterId], currentEmotion: 'idle', isAnimating: false },
         }));
       }
     }, 800);
-  }, [previews]);
+
+    // Store interval ID for cleanup
+    previewIntervalsRef.current[characterId] = interval;
+  }, []); // ✅ Fixed: Empty dependency array prevents recreation
 
   // Keyboard navigation
   useEffect(() => {
@@ -207,24 +282,65 @@ export default function CharacterSelection() {
     }
   };
 
-  // Get sprite for character
+  // Get sprite for character (returns relative path, preloading helps with caching)
   const getCharacterSprite = (characterId: CharacterType, emotion: EmotionState): string => {
+    // Defensive check: should never happen now that we use ?? 'idle' at call sites
+    if (!emotion) {
+      console.warn(`⚠️ Unexpected: Emotion is falsy for character ${characterId}, using 'idle'`);
+      emotion = 'idle';
+    }
+
     const emotionMap: Record<EmotionState, string> = {
       idle: 'Idle2',
       happy: 'Happy',
       angry: 'Angry',
       fall: 'Fall',
     };
-    return `/characters/${characterId}/${emotionMap[emotion]}.png`;
+
+    const emotionKey = emotionMap[emotion];
+
+    // Safety check: if emotionKey is undefined, default to Idle2
+    if (!emotionKey) {
+      console.error(`❌ CRITICAL: No mapping for emotion "${emotion}"! Defaulting to Idle2`);
+      return `/characters/${characterId}/Idle2.png`;
+    }
+
+    const sprite = loadedSprites[characterId]?.[emotionKey];
+
+    // Always return relative path (preloaded sprites help browser cache it)
+    const path = `/characters/${characterId}/${emotionKey}.png`;
+
+    if (!sprite) {
+      console.warn(`⚠️ Sprite not preloaded for character ${characterId}, emotion ${emotion} -> ${emotionKey}`);
+      console.warn(`   Path will be: ${path}`);
+      console.warn(`   Available sprites for character ${characterId}:`, loadedSprites[characterId] ? Object.keys(loadedSprites[characterId]) : 'NONE');
+    } else {
+      console.log(`✓ Using preloaded sprite: character ${characterId}, emotion ${emotion} -> ${path}`);
+    }
+
+    return path;
   };
 
   // Check if continue button should be enabled
   const canContinue = mode === 'practice' ? player1Selection !== null : (player1Selection !== null && player2Selection !== null);
 
   if (spritesLoading) {
+    const progress = Math.round((loadingProgress.loaded / loadingProgress.total) * 100);
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
-        <div className="text-white text-2xl">Loading Characters...</div>
+        <div className="text-center">
+          <div className="text-white text-3xl font-bold mb-4">Loading Characters...</div>
+          <div className="text-gray-300 text-lg mb-4">
+            {loadingProgress.loaded} / {loadingProgress.total} sprites loaded
+          </div>
+          <div className="w-64 h-3 bg-gray-700 rounded-full overflow-hidden mx-auto">
+            <div
+              className="h-full bg-gradient-to-r from-cyan-500 to-pink-500 transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <div className="text-cyan-400 text-sm mt-2">{progress}%</div>
+        </div>
       </div>
     );
   }
@@ -291,11 +407,29 @@ export default function CharacterSelection() {
                 {/* Character Portrait */}
                 <div className="relative h-64 bg-gradient-to-b from-gray-700 to-gray-800 flex items-center justify-center overflow-hidden">
                   <motion.img
-                    src={getCharacterSprite(characterId, previews[characterId].currentEmotion)}
+                    src={getCharacterSprite(characterId, previews[characterId]?.currentEmotion ?? 'idle')}
                     alt={stats.name}
                     className="h-48 object-contain"
                     animate={{
                       scale: isSelected ? 1.1 : 1,
+                    }}
+                    onLoad={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      console.log(`✅ Image loaded successfully: ${target.src}`);
+                    }}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      const emotion = previews[characterId].currentEmotion;
+                      console.error(`❌ FAILED to load sprite:`);
+                      console.error(`   Character: ${characterId} (${stats.name})`);
+                      console.error(`   Emotion: ${emotion}`);
+                      console.error(`   Attempted URL: ${target.src}`);
+                      console.error(`   Preloaded: ${loadedSprites[characterId] ? 'YES' : 'NO'}`);
+                      if (loadedSprites[characterId]) {
+                        console.error(`   Available emotions:`, Object.keys(loadedSprites[characterId]));
+                      }
+                      // Set a placeholder or retry
+                      target.style.opacity = '0.5';
                     }}
                   />
 
@@ -305,6 +439,10 @@ export default function CharacterSelection() {
                       src={`/characters/${characterId}/Dash.png`}
                       alt="Dash"
                       className="h-8 w-8 object-contain"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                      }}
                     />
                   </div>
                 </div>

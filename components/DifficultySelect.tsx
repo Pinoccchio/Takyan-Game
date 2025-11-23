@@ -7,7 +7,7 @@
 
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { Users } from 'lucide-react';
+import { Users, Sliders } from 'lucide-react';
 import { COLORS } from '@/lib/constants';
 
 export default function DifficultySelect() {
@@ -160,19 +160,20 @@ export default function DifficultySelect() {
           transition={{ duration: 0.6, delay: 0.3 }}
           className="mb-12 text-center"
         >
-          <Link href="/custom-difficulty">
+          <Link href="/custom-difficulty" className="inline-block">
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="px-12 py-4 rounded-xl text-xl font-bold transition-all"
+              className="px-12 py-4 rounded-xl text-xl font-bold transition-all flex items-center justify-center gap-2"
               style={{
-                background: `linear-gradient(135deg, ${COLORS.neonCyan} 0%, ${COLORS.neonPurple} 100%)`,
+                background: `linear-gradient(135deg, ${COLORS.neonPurple} 0%, ${COLORS.neonPurple}CC 100%)`,
                 color: COLORS.white,
-                boxShadow: `0 0 30px rgba(6, 182, 212, 0.5)`,
-                border: `2px solid ${COLORS.neonCyan}`,
+                boxShadow: `0 0 30px rgba(179, 0, 255, 0.6)`,
+                border: `2px solid ${COLORS.neonPurple}`,
               }}
             >
-              🎛️ Custom Settings
+              <Sliders className="w-5 h-5" />
+              Advanced Settings
             </motion.button>
           </Link>
         </motion.div>
