@@ -57,7 +57,7 @@ export function determineScoringSide(
  * In practice mode, allows full court movement
  * In versus mode, restricts players to their half of the court
  */
-export function keepPlayerInBounds(player: Player, config: GameConfig, isPracticeMode: boolean = false): Player {
+export function keepPlayerInBounds(player: Player, config: GameConfig, isPracticeMode: boolean = false, isPlayer1: boolean = true): Player {
   let newX = player.x;
 
   if (isPracticeMode) {
@@ -67,11 +67,11 @@ export function keepPlayerInBounds(player: Player, config: GameConfig, isPractic
     // Versus mode: Keep player within their half of the court
     const centerX = config.canvasWidth / 2;
 
-    if (player.x < centerX) {
-      // Player 1 (left side)
+    if (isPlayer1) {
+      // Player 1 (left side) - restrict to left half ALWAYS
       newX = Math.max(0, Math.min(player.x, centerX - player.width));
     } else {
-      // Player 2 (right side)
+      // Player 2 (right side) - restrict to right half ALWAYS
       newX = Math.max(centerX, Math.min(player.x, config.canvasWidth - player.width));
     }
   }

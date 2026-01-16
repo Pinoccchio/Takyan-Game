@@ -180,6 +180,7 @@ export default function GameCanvas() {
           gameStateRef.current,
           finalInput,
           gameConfig,
+          deltaTime,
           customMultipliersRef.current
         );
 

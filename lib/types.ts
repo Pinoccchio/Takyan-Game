@@ -174,12 +174,12 @@ export interface GameConfig {
 export const DEFAULT_CONFIG: GameConfig = {
   canvasWidth: 800,
   canvasHeight: 600,
-  gravity: 0.5,
-  playerSpeed: 5,
+  gravity: 0.6,
+  playerSpeed: 6,
   dashSpeed: 12,
   dashDuration: 500, // Increased from 200ms to 500ms for better visibility
   dashCooldownTime: 1000,
-  kickPower: 15,
+  kickPower: 25,
   groundLevel: 500,
   winningScore: 10,
   fps: 60,

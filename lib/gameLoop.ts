@@ -123,6 +123,7 @@ export function updateGameState(
   state: GameState,
   input: InputState,
   config: GameConfig,
+  deltaTime: number,
   customMultipliers?: { ballSpeed: number; gravity: number; playerSpeed: number; isCustom: boolean }
 ): { newState: GameState; particlesToEmit: Particle[] } {
   let particlesToEmit: Particle[] = [];
@@ -184,7 +185,7 @@ export function updateGameState(
   // Apply player input for movement
   const player1NewX = applyPlayerInput(
     state.player1.x,
-    player1Speed,
+    player1Speed * deltaTime * 60,
     input.player1Left,
     input.player1Right
   );
@@ -192,7 +193,8 @@ export function updateGameState(
   newState.player1 = keepPlayerInBounds(
     { ...newState.player1, x: player1NewX },
     config,
-    state.gameMode === 'practice'
+    state.gameMode === 'practice',
+    true
   );
 
   // Update facing direction for player 1
@@ -229,7 +231,7 @@ export function updateGameState(
     // Apply player input for movement
     const player2NewX = applyPlayerInput(
       state.player2.x,
-      player2Speed,
+      player2Speed * deltaTime * 60,
       input.player2Left,
       input.player2Right
     );
@@ -237,6 +239,7 @@ export function updateGameState(
     newState.player2 = keepPlayerInBounds(
       { ...newState.player2, x: player2NewX },
       config,
+      false,
       false
     );
 
@@ -320,7 +323,7 @@ export function updateGameState(
   }
 
   // Update takyan physics with difficulty-based gravity
-  newState.takyan = updateTakyanPhysics(newState.takyan, config, 1, gravityMultiplier);
+  newState.takyan = updateTakyanPhysics(newState.takyan, config, deltaTime * 60, gravityMultiplier);
   newState.takyan = applyAirResistance(newState.takyan);
 
   // Check for wall boundary collisions and bounce
@@ -405,12 +408,10 @@ export function updateGameState(
   }
 
   // Update kick animations (both players)
-  const deltaTime = 16; // Assuming ~60fps, 16ms per frame
-
   if (newState.player1.isKicking) {
     newState.player1 = {
       ...newState.player1,
-      kickAnimationFrame: newState.player1.kickAnimationFrame + deltaTime,
+      kickAnimationFrame: newState.player1.kickAnimationFrame + (deltaTime * 1000),
     };
 
     // End kick animation after duration
@@ -426,7 +427,7 @@ export function updateGameState(
   if (newState.player2.isKicking) {
     newState.player2 = {
       ...newState.player2,
-      kickAnimationFrame: newState.player2.kickAnimationFrame + deltaTime,
+      kickAnimationFrame: newState.player2.kickAnimationFrame + (deltaTime * 1000),
     };
 
     // End kick animation after duration
@@ -443,7 +444,7 @@ export function updateGameState(
   if (newState.player1.emotionTimer > 0) {
     newState.player1 = {
       ...newState.player1,
-      emotionTimer: Math.max(0, newState.player1.emotionTimer - deltaTime),
+      emotionTimer: Math.max(0, newState.player1.emotionTimer - (deltaTime * 1000)),
     };
 
     // Clear emotion when timer expires
@@ -455,7 +456,7 @@ export function updateGameState(
   if (newState.player2.emotionTimer > 0) {
     newState.player2 = {
       ...newState.player2,
-      emotionTimer: Math.max(0, newState.player2.emotionTimer - deltaTime),
+      emotionTimer: Math.max(0, newState.player2.emotionTimer - (deltaTime * 1000)),
     };
 
     // Clear emotion when timer expires
@@ -468,7 +469,7 @@ export function updateGameState(
   console.log('[TIMER UPDATE] BEFORE - isDashing:', newState.player1.isDashing, 'dashDuration:', newState.player1.dashDuration, 'dashCooldown:', newState.player1.dashCooldown, 'deltaTime:', deltaTime);
 
   if (newState.player1.isDashing) {
-    const newDashDuration = Math.max(0, newState.player1.dashDuration - deltaTime);
+    const newDashDuration = Math.max(0, newState.player1.dashDuration - (deltaTime * 1000));
     const dashEnding = newDashDuration === 0; // Dash is ending this frame
     newState.player1 = {
       ...newState.player1,
@@ -481,16 +482,16 @@ export function updateGameState(
 
   if (newState.player1.dashCooldown > 0) {
     const previousCooldown = newState.player1.dashCooldown;
-    const newCooldown = Math.max(0, newState.player1.dashCooldown - deltaTime);
+    const newCooldown = Math.max(0, newState.player1.dashCooldown - (deltaTime * 1000));
     newState.player1 = {
       ...newState.player1,
       dashCooldown: newCooldown,
     };
-    console.log('[COOLDOWN] Player 1 - Previous:', previousCooldown.toFixed(2), 'New:', newCooldown.toFixed(2), 'Delta:', deltaTime.toFixed(2), 'Progress:', ((1 - newCooldown / config.dashCooldownTime) * 100).toFixed(1) + '%', 'Ready:', newCooldown === 0);
+    console.log('[COOLDOWN] Player 1 - Previous:', previousCooldown.toFixed(2), 'New:', newCooldown.toFixed(2), 'Delta:', (deltaTime * 1000).toFixed(2), 'Progress:', ((1 - newCooldown / config.dashCooldownTime) * 100).toFixed(1) + '%', 'Ready:', newCooldown === 0);
   }
 
   if (newState.player2.isDashing) {
-    const newDashDuration = Math.max(0, newState.player2.dashDuration - deltaTime);
+    const newDashDuration = Math.max(0, newState.player2.dashDuration - (deltaTime * 1000));
     const dashEnding = newDashDuration === 0; // Dash is ending this frame
     newState.player2 = {
       ...newState.player2,
@@ -503,7 +504,7 @@ export function updateGameState(
   if (newState.player2.dashCooldown > 0) {
     newState.player2 = {
       ...newState.player2,
-      dashCooldown: Math.max(0, newState.player2.dashCooldown - deltaTime),
+      dashCooldown: Math.max(0, newState.player2.dashCooldown - (deltaTime * 1000)),
     };
   }
 
