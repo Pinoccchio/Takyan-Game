@@ -88,9 +88,22 @@ export default function GameCanvas() {
     };
   }, []);
 
+  // Global unhandled rejection handler
+  useEffect(() => {
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error('[GAME] Unhandled promise rejection:', event.reason);
+      event.preventDefault();
+    };
+
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    return () => window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+  }, []);
+
   // Load character sprites
   useEffect(() => {
     console.log('[GAME] GameCanvas mounted, starting sprite loading...');
+    let isMounted = true;
+
     const loadSprites = async () => {
       try {
         console.log('[GAME] Setting spritesLoading = true');
@@ -99,21 +112,31 @@ export default function GameCanvas() {
         console.log('[GAME] Calling loadAllSprites()...');
         const sprites = await loadAllSprites();
 
+        if (!isMounted) return; // Component unmounted during loading
+
         console.log('[GAME] loadAllSprites() returned successfully!');
         console.log('[GAME] Setting loadedSprites state...');
         setLoadedSprites(sprites);
         console.log('[GAME] ✅ loadedSprites state set successfully');
       } catch (error) {
+        if (!isMounted) return; // Component unmounted during loading
+
         console.error('[GAME] ❌ Failed to load character sprites:', error);
         console.warn('[GAME] ⚠️  Using fallback geometric rendering');
       } finally {
-        console.log('[GAME] Setting spritesLoading = false');
-        setSpritesLoading(false);
-        console.log('[GAME] Sprite loading process complete');
+        if (isMounted) {
+          console.log('[GAME] Setting spritesLoading = false');
+          setSpritesLoading(false);
+          console.log('[GAME] Sprite loading process complete');
+        }
       }
     };
 
     loadSprites();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Handle keyboard input
@@ -150,7 +173,16 @@ export default function GameCanvas() {
     return () => {
       window.removeEventListener('keydown', handleKeyDownEvent);
       window.removeEventListener('keyup', handleKeyUpEvent);
+      // Clear input state on unmount to prevent sticky keys
+      inputStateRef.current = createInputState();
     };
+  }, [winner]);
+
+  // Clear input state when game ends
+  useEffect(() => {
+    if (winner !== null) {
+      inputStateRef.current = createInputState();
+    }
   }, [winner]);
 
   // Game loop

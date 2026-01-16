@@ -11,13 +11,14 @@ import { COLORS } from './constants';
 import { updateParticles, renderParticles, emitParticles } from './effects/particles';
 import { LoadedSprites, getCharacterSprites, CharacterSprites } from './spriteLoader';
 import { AnimationType } from './spriteLoader';
-import {
-  PlayerAnimationState,
-  createAnimationState,
-  updateAnimationState,
-  createAnimationContext,
-  getPlayerAnimation as getPlayerAnimationFromManager
-} from './animationManager';
+
+/**
+ * Debug flags - set to true only during development
+ */
+const DEBUG_DASH = false;
+const DEBUG_ANIMATION = false;
+const DEBUG_RENDER = false;
+const DEBUG_TIMERS = false;
 
 /**
  * Sprite sheet configuration: number of frames for each animation
@@ -163,16 +164,13 @@ export function updateGameState(
   // Handle dash for player 1
   if (input.player1Dash) {
     if (newState.player1.dashCooldown <= 0 && !newState.player1.isDashing) {
-      console.log('[DASH] Player 1 dash activated! Duration:', config.dashDuration, 'ms, Cooldown:', config.dashCooldownTime, 'ms');
-      newState.player1 = {
-        ...newState.player1,
-        isDashing: true,
-        dashDuration: config.dashDuration,
-        dashCooldown: 0, // Don't start cooldown yet - it starts when dash ends
-      };
-      console.log('[DASH AFTER SET] isDashing:', newState.player1.isDashing, 'dashDuration:', newState.player1.dashDuration);
+      if (DEBUG_DASH) console.log('[DASH] Player 1 dash activated! Duration:', config.dashDuration, 'ms, Cooldown:', config.dashCooldownTime, 'ms');
+      newState.player1.isDashing = true;
+      newState.player1.dashDuration = config.dashDuration;
+      newState.player1.dashCooldown = 0; // Don't start cooldown yet - it starts when dash ends
+      if (DEBUG_DASH) console.log('[DASH AFTER SET] isDashing:', newState.player1.isDashing, 'dashDuration:', newState.player1.dashDuration);
     } else {
-      console.log('[DASH BLOCKED] Player 1 - Cooldown:', newState.player1.dashCooldown.toFixed(2), 'ms remaining, isDashing:', newState.player1.isDashing);
+      if (DEBUG_DASH) console.log('[DASH BLOCKED] Player 1 - Cooldown:', newState.player1.dashCooldown.toFixed(2), 'ms remaining, isDashing:', newState.player1.isDashing);
     }
   }
 
@@ -213,7 +211,7 @@ export function updateGameState(
   if (state.gameMode === 'versus') {
     // Handle dash for player 2
     if (input.player2Dash && newState.player2.dashCooldown <= 0 && !newState.player2.isDashing) {
-      console.log('[DASH] Player 2 dash activated! Duration:', config.dashDuration, 'ms, Cooldown:', config.dashCooldownTime, 'ms');
+      if (DEBUG_DASH) console.log('[DASH] Player 2 dash activated! Duration:', config.dashDuration, 'ms, Cooldown:', config.dashCooldownTime, 'ms');
       newState.player2 = {
         ...newState.player2,
         isDashing: true,
@@ -409,43 +407,28 @@ export function updateGameState(
 
   // Update kick animations (both players)
   if (newState.player1.isKicking) {
-    newState.player1 = {
-      ...newState.player1,
-      kickAnimationFrame: newState.player1.kickAnimationFrame + (deltaTime * 1000),
-    };
+    newState.player1.kickAnimationFrame += deltaTime * 1000;
 
     // End kick animation after duration
     if (newState.player1.kickAnimationFrame >= newState.player1.kickAnimationDuration) {
-      newState.player1 = {
-        ...newState.player1,
-        isKicking: false,
-        kickAnimationFrame: 0,
-      };
+      newState.player1.isKicking = false;
+      newState.player1.kickAnimationFrame = 0;
     }
   }
 
   if (newState.player2.isKicking) {
-    newState.player2 = {
-      ...newState.player2,
-      kickAnimationFrame: newState.player2.kickAnimationFrame + (deltaTime * 1000),
-    };
+    newState.player2.kickAnimationFrame += deltaTime * 1000;
 
     // End kick animation after duration
     if (newState.player2.kickAnimationFrame >= newState.player2.kickAnimationDuration) {
-      newState.player2 = {
-        ...newState.player2,
-        isKicking: false,
-        kickAnimationFrame: 0,
-      };
+      newState.player2.isKicking = false;
+      newState.player2.kickAnimationFrame = 0;
     }
   }
 
   // Update emotion timers (both players)
   if (newState.player1.emotionTimer > 0) {
-    newState.player1 = {
-      ...newState.player1,
-      emotionTimer: Math.max(0, newState.player1.emotionTimer - (deltaTime * 1000)),
-    };
+    newState.player1.emotionTimer = Math.max(0, newState.player1.emotionTimer - (deltaTime * 1000));
 
     // Clear emotion when timer expires
     if (newState.player1.emotionTimer === 0) {
@@ -454,10 +437,7 @@ export function updateGameState(
   }
 
   if (newState.player2.emotionTimer > 0) {
-    newState.player2 = {
-      ...newState.player2,
-      emotionTimer: Math.max(0, newState.player2.emotionTimer - (deltaTime * 1000)),
-    };
+    newState.player2.emotionTimer = Math.max(0, newState.player2.emotionTimer - (deltaTime * 1000));
 
     // Clear emotion when timer expires
     if (newState.player2.emotionTimer === 0) {
@@ -466,64 +446,50 @@ export function updateGameState(
   }
 
   // Update dash timers and cooldowns (both players)
-  console.log('[TIMER UPDATE] BEFORE - isDashing:', newState.player1.isDashing, 'dashDuration:', newState.player1.dashDuration, 'dashCooldown:', newState.player1.dashCooldown, 'deltaTime:', deltaTime);
+  if (DEBUG_TIMERS) console.log('[TIMER UPDATE] BEFORE - isDashing:', newState.player1.isDashing, 'dashDuration:', newState.player1.dashDuration, 'dashCooldown:', newState.player1.dashCooldown, 'deltaTime:', deltaTime);
 
   if (newState.player1.isDashing) {
     const newDashDuration = Math.max(0, newState.player1.dashDuration - (deltaTime * 1000));
     const dashEnding = newDashDuration === 0; // Dash is ending this frame
-    newState.player1 = {
-      ...newState.player1,
-      dashDuration: newDashDuration,
-      isDashing: newDashDuration > 0, // End dash when duration expires
-      dashCooldown: dashEnding ? config.dashCooldownTime : newState.player1.dashCooldown, // Start cooldown when dash ends
-    };
-    console.log('[TIMER UPDATE] AFTER DASH - newDashDuration:', newDashDuration, 'isDashing:', newState.player1.isDashing, 'dashEnding:', dashEnding);
+    newState.player1.dashDuration = newDashDuration;
+    newState.player1.isDashing = newDashDuration > 0; // End dash when duration expires
+    if (dashEnding) {
+      newState.player1.dashCooldown = config.dashCooldownTime; // Start cooldown when dash ends
+    }
+    if (DEBUG_TIMERS) console.log('[TIMER UPDATE] AFTER DASH - newDashDuration:', newDashDuration, 'isDashing:', newState.player1.isDashing, 'dashEnding:', dashEnding);
   }
 
   if (newState.player1.dashCooldown > 0) {
     const previousCooldown = newState.player1.dashCooldown;
     const newCooldown = Math.max(0, newState.player1.dashCooldown - (deltaTime * 1000));
-    newState.player1 = {
-      ...newState.player1,
-      dashCooldown: newCooldown,
-    };
-    console.log('[COOLDOWN] Player 1 - Previous:', previousCooldown.toFixed(2), 'New:', newCooldown.toFixed(2), 'Delta:', (deltaTime * 1000).toFixed(2), 'Progress:', ((1 - newCooldown / config.dashCooldownTime) * 100).toFixed(1) + '%', 'Ready:', newCooldown === 0);
+    newState.player1.dashCooldown = newCooldown;
+    if (DEBUG_TIMERS) console.log('[COOLDOWN] Player 1 - Previous:', previousCooldown.toFixed(2), 'New:', newCooldown.toFixed(2), 'Delta:', (deltaTime * 1000).toFixed(2), 'Progress:', ((1 - newCooldown / config.dashCooldownTime) * 100).toFixed(1) + '%', 'Ready:', newCooldown === 0);
   }
 
   if (newState.player2.isDashing) {
     const newDashDuration = Math.max(0, newState.player2.dashDuration - (deltaTime * 1000));
     const dashEnding = newDashDuration === 0; // Dash is ending this frame
-    newState.player2 = {
-      ...newState.player2,
-      dashDuration: newDashDuration,
-      isDashing: newDashDuration > 0, // End dash when duration expires
-      dashCooldown: dashEnding ? config.dashCooldownTime : newState.player2.dashCooldown, // Start cooldown when dash ends
-    };
+    newState.player2.dashDuration = newDashDuration;
+    newState.player2.isDashing = newDashDuration > 0; // End dash when duration expires
+    if (dashEnding) {
+      newState.player2.dashCooldown = config.dashCooldownTime; // Start cooldown when dash ends
+    }
   }
 
   if (newState.player2.dashCooldown > 0) {
-    newState.player2 = {
-      ...newState.player2,
-      dashCooldown: Math.max(0, newState.player2.dashCooldown - (deltaTime * 1000)),
-    };
+    newState.player2.dashCooldown = Math.max(0, newState.player2.dashCooldown - (deltaTime * 1000));
   }
 
   // Update lastX positions for next frame's movement detection
   // Use the PREVIOUS frame's position (stored at start of function)
-  newState.player1 = {
-    ...newState.player1,
-    lastX: previousPlayer1X,
-  };
+  newState.player1.lastX = previousPlayer1X;
 
   if (state.gameMode === 'versus') {
-    newState.player2 = {
-      ...newState.player2,
-      lastX: previousPlayer2X,
-    };
+    newState.player2.lastX = previousPlayer2X;
   }
 
-  // Debug logging for dash state (ALWAYS log to see what's happening)
-  console.log('[UPDATE END] Player 1 final state - isDashing:', newState.player1.isDashing, 'dashDuration:', newState.player1.dashDuration, 'dashCooldown:', newState.player1.dashCooldown);
+  // Debug logging for dash state
+  if (DEBUG_TIMERS) console.log('[UPDATE END] Player 1 final state - isDashing:', newState.player1.isDashing, 'dashDuration:', newState.player1.dashDuration, 'dashCooldown:', newState.player1.dashCooldown);
 
   return { newState, particlesToEmit };
 }
@@ -540,8 +506,8 @@ export function renderGame(
   takyanImage?: HTMLImageElement | null,
   loadedSprites?: LoadedSprites | null
 ): void {
-  // Debug logging for dash state at render time (ALWAYS log)
-  console.log('[RENDER START] Player 1 state - isDashing:', state.player1.isDashing, 'dashDuration:', state.player1.dashDuration, 'dashCooldown:', state.player1.dashCooldown);
+  // Debug logging for dash state at render time
+  if (DEBUG_RENDER) console.log('[RENDER START] Player 1 state - isDashing:', state.player1.isDashing, 'dashDuration:', state.player1.dashDuration, 'dashCooldown:', state.player1.dashCooldown);
 
   // Apply screen shake
   ctx.save();
@@ -644,7 +610,7 @@ function drawDashCooldownIndicator(
   const readyProgress = 1 - cooldownProgress;
 
   // Debug logging for bar rendering
-  if (player.dashCooldown > 0 || player.isDashing) {
+  if (DEBUG_RENDER && (player.dashCooldown > 0 || player.isDashing)) {
     console.log('[BAR RENDER] dashCooldown:', player.dashCooldown.toFixed(2), 'cooldownProgress:', (cooldownProgress * 100).toFixed(1) + '%', 'readyProgress:', (readyProgress * 100).toFixed(1) + '%', 'barWidth:', (indicatorWidth * readyProgress).toFixed(1) + 'px');
   }
 
@@ -700,35 +666,35 @@ function drawDashCooldownIndicator(
  * Includes emotion animations (Happy/Angry/Fall) and dash animation
  */
 function getPlayerAnimation(player: GameState['player1']): AnimationType {
-  console.log('[GET ANIMATION] Checking - isDashing:', player.isDashing, 'isKicking:', player.isKicking, 'x:', player.x, 'lastX:', player.lastX, 'diff:', Math.abs(player.x - player.lastX));
+  if (DEBUG_ANIMATION) console.log('[GET ANIMATION] Checking - isDashing:', player.isDashing, 'isKicking:', player.isKicking, 'x:', player.x, 'lastX:', player.lastX, 'diff:', Math.abs(player.x - player.lastX));
 
   // Priority 1: Emotion animations (Happy/Angry/Fall)
   if (player.emotionTimer > 0 && player.lastEmotion) {
-    console.log('[GET ANIMATION] Returning emotion:', player.lastEmotion);
+    if (DEBUG_ANIMATION) console.log('[GET ANIMATION] Returning emotion:', player.lastEmotion);
     return player.lastEmotion as AnimationType;
   }
 
   // Priority 2: Dash animation
   if (player.isDashing) {
-    console.log('[GET ANIMATION] Returning Dash (isDashing = TRUE)');
+    if (DEBUG_ANIMATION) console.log('[GET ANIMATION] Returning Dash (isDashing = TRUE)');
     return 'Dash';
   }
 
   // Priority 3: Kicking animation
   if (player.isKicking) {
-    console.log('[GET ANIMATION] Returning Walk_attack (kicking)');
+    if (DEBUG_ANIMATION) console.log('[GET ANIMATION] Returning Walk_attack (kicking)');
     return 'Walk_attack';
   }
 
   // Priority 4: Walking animation (detect movement from position change)
   const isMoving = Math.abs(player.x - player.lastX) > 0.1;
   if (isMoving) {
-    console.log('[GET ANIMATION] Returning Walk (isMoving = TRUE)');
+    if (DEBUG_ANIMATION) console.log('[GET ANIMATION] Returning Walk (isMoving = TRUE)');
     return 'Walk';
   }
 
   // Priority 5: Idle animation
-  console.log('[GET ANIMATION] Returning Idle2 (default)');
+  if (DEBUG_ANIMATION) console.log('[GET ANIMATION] Returning Idle2 (default)');
   return 'Idle2';
 }
 
@@ -749,7 +715,7 @@ function drawSpritePlayer(
   const centerY = player.y + player.height / 2;
 
   // Log when drawing Dash animation
-  if (animation === 'Dash' || player.isDashing) {
+  if (DEBUG_RENDER && (animation === 'Dash' || player.isDashing)) {
     console.log('[RENDER] Drawing player with animation:', animation, 'isDashing:', player.isDashing);
   }
 

@@ -55,27 +55,42 @@ function loadImage(src: string, timeout: number = 5000): Promise<HTMLImageElemen
   console.log(`[SPRITE] Starting to load: ${src}`);
   return new Promise((resolve, reject) => {
     const img = new Image();
+    let isSettled = false;
     let timeoutId: NodeJS.Timeout | null = null;
+
+    const cleanup = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      img.onload = null;
+      img.onerror = null;
+    };
 
     // Set up timeout protection
     timeoutId = setTimeout(() => {
-      console.error(`[SPRITE] ❌ TIMEOUT after ${timeout}ms: ${src}`);
-      img.onload = null;
-      img.onerror = null;
-      reject(new Error(`Timeout loading image: ${src}`));
+      if (!isSettled) {
+        isSettled = true;
+        console.error(`[SPRITE] ❌ TIMEOUT after ${timeout}ms: ${src}`);
+        cleanup();
+        reject(new Error(`Timeout loading image: ${src}`));
+      }
     }, timeout);
 
     // Set up event handlers BEFORE setting src to avoid race condition
     img.onload = () => {
-      console.log(`[SPRITE] ✅ Loaded successfully: ${src}`);
-      if (timeoutId) clearTimeout(timeoutId);
-      resolve(img);
+      if (!isSettled) {
+        isSettled = true;
+        console.log(`[SPRITE] ✅ Loaded successfully: ${src}`);
+        cleanup();
+        resolve(img);
+      }
     };
 
     img.onerror = () => {
-      console.error(`[SPRITE] ❌ Failed to load: ${src}`);
-      if (timeoutId) clearTimeout(timeoutId);
-      reject(new Error(`Failed to load image: ${src}`));
+      if (!isSettled) {
+        isSettled = true;
+        console.error(`[SPRITE] ❌ Failed to load: ${src}`);
+        cleanup();
+        reject(new Error(`Failed to load image: ${src}`));
+      }
     };
 
     // Set src AFTER handlers are attached
